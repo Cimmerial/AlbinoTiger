@@ -21,7 +21,8 @@
       rootDir: 'AlbinoTiger', // EDITED: Per-app root directory
       prompts: [
         { id: 'general_learning', label: 'Learning', file: 'general-learning.md' },
-    // general (writing in my voice, code question,)
+        { id: 'general_coding', label: 'Coding', file: 'general-coding.md' },
+        // general (writing in my voice, code question,)
       ],
     },
     // retro-royale
@@ -36,7 +37,7 @@
     foundFiles: [],
     selectedFiles: new Set(),
     enabledFiles: new Set(),
-    savedEnabledFiles: new Set(), // EDITED: Remember enabled files when server goes offline
+    savedEnabledFiles: new Set(),
     isModalVisible: true,
     isSearchFocused: false,
     onceMode: false,
@@ -157,45 +158,98 @@
     return { match: false, priority: 999 };
   }
 
-  function loadState() {
+  async function isFolderFullySelected(folderPath) {
     try {
-      const saved = localStorage.getItem('albinoTiger_state');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        state.currentApp = parsed.currentApp || 'AlbinoTiger';
-        state.customPrompt = parsed.customPrompt || '';
-        state.toggledPrompts = new Set(parsed.toggledPrompts || []);
-        state.selectedFiles = new Set(parsed.selectedFiles || []);
-        state.enabledFiles = new Set(parsed.enabledFiles || parsed.selectedFiles || []);
-        state.savedEnabledFiles = new Set(parsed.savedEnabledFiles || []); // EDITED
-        state.isModalVisible = parsed.isModalVisible !== undefined ? parsed.isModalVisible : true;
-        state.onceMode = parsed.onceMode || false;
-        console.log('🐯 AlbinoTiger: State loaded from localStorage', state);
+      const url = `http://localhost:12345/folder-contents?path=${encodeURIComponent(folderPath)}`;
+      const response = await fetch(url);
+      if (!response.ok) return false;
+
+      const filesInFolder = await response.json();
+      if (filesInFolder.length === 0) return false;
+
+      // All files in folder must be selected
+      return filesInFolder.every(file => state.selectedFiles.has(file));
+    } catch (err) {
+      return false;
+    }
+  }
+  function hasStorageAPI() {
+    return typeof window.storage !== 'undefined' && window.storage?.get && window.storage?.set;
+  }
+
+  async function loadState() {
+    try {
+      let data = null;
+
+      // EDITED: Try persistent storage API first
+      if (hasStorageAPI()) {
+        try {
+          const result = await window.storage.get('albinoTiger_state');
+          if (result) {
+            data = JSON.parse(result.value);
+            console.log('🐯 AlbinoTiger: State loaded from persistent storage API', data);
+          }
+        } catch (apiErr) {
+          console.warn('🐯 AlbinoTiger: Persistent storage API failed, falling back to localStorage:', apiErr);
+        }
+      }
+
+      // EDITED: Fall back to localStorage if API unavailable or no data
+      if (!data) {
+        const saved = localStorage.getItem('albinoTiger_state');
+        if (saved) {
+          data = JSON.parse(saved);
+          console.log('🐯 AlbinoTiger: State loaded from localStorage (fallback)', data);
+        }
+      }
+
+      // EDITED: Apply loaded data
+      if (data) {
+        state.currentApp = data.currentApp || 'AlbinoTiger';
+        state.customPrompt = data.customPrompt || '';
+        state.toggledPrompts = new Set(data.toggledPrompts || []);
+        state.selectedFiles = new Set(data.selectedFiles || []);
+        state.enabledFiles = new Set(data.enabledFiles || data.selectedFiles || []);
+        state.savedEnabledFiles = new Set(data.savedEnabledFiles || []);
+        state.isModalVisible = data.isModalVisible !== undefined ? data.isModalVisible : true;
+        state.onceMode = data.onceMode || false;
       }
     } catch (e) {
       console.error('🐯 AlbinoTiger: Error loading state', e);
     }
   }
 
-  // Save state
-  function saveState() {
+  async function saveState() {
     try {
-      localStorage.setItem('albinoTiger_state', JSON.stringify({
+      const stateData = {
         currentApp: state.currentApp,
         customPrompt: state.customPrompt,
         toggledPrompts: Array.from(state.toggledPrompts),
         selectedFiles: Array.from(state.selectedFiles),
         enabledFiles: Array.from(state.enabledFiles),
-        savedEnabledFiles: Array.from(state.savedEnabledFiles), // EDITED
+        savedEnabledFiles: Array.from(state.savedEnabledFiles),
         isModalVisible: state.isModalVisible,
         onceMode: state.onceMode,
-      }));
-      console.log('🐯 AlbinoTiger: State saved');
+      };
+
+      // EDITED: Try persistent storage API first
+      if (hasStorageAPI()) {
+        try {
+          await window.storage.set('albinoTiger_state', JSON.stringify(stateData));
+          console.log('🐯 AlbinoTiger: State saved to persistent storage API');
+          return;
+        } catch (apiErr) {
+          console.warn('🐯 AlbinoTiger: Persistent storage API failed, falling back to localStorage:', apiErr);
+        }
+      }
+
+      // EDITED: Fall back to localStorage
+      localStorage.setItem('albinoTiger_state', JSON.stringify(stateData));
+      console.log('🐯 AlbinoTiger: State saved to localStorage (fallback)');
     } catch (e) {
       console.error('🐯 AlbinoTiger: Error saving state', e);
     }
   }
-
   // EDITED: New function to load prompt content from .md files
   async function loadPromptContent(fileName) {
     // Check cache first
@@ -277,18 +331,18 @@
     max-height: 40px; /* EDITED: Just header height */
   }
          
-         #at-modal[data-visible="false"] #at-body,
+  #at-modal[data-visible="false"] #at-body,
   #at-modal[data-visible="false"] #at-footer {
-    opacity: 0; /* EDITED: Fade out instead of display:none */
-    visibility: hidden; /* EDITED */
-    max-height: 0; /* EDITED */
-    padding: 0; /* EDITED */
-    overflow: hidden; /* EDITED */
-    transition: opacity 0.2s ease, max-height 0.2s ease, padding 0.2s ease; /* EDITED */
+    opacity: 0;
+    visibility: hidden;
+    max-height: 0;
+    padding: 0;
+    overflow: hidden;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s 0.3s, max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  
-  #at-body, #at-footer { /* EDITED: Add transition for expanding */
-    transition: opacity 0.3s ease 0.1s, max-height 0.3s ease, padding 0.3s ease; /* EDITED */
+
+  #at-body, #at-footer {
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
          
          #at-modal[data-visible="false"] #at-header {
@@ -576,8 +630,14 @@
         white-space: nowrap;
       }
       .at-file-item:hover {
-          background: var(--at-bg-light);
-      }
+        background: var(--at-bg-light);
+    }
+
+    .at-file-item.folder-selected { /* EDITED: Visual state for fully-selected folder */
+        background: rgba(245, 158, 11, 0.1);
+        border-left: 3px solid var(--at-primary);
+        padding-left: 4px;
+    }
       .at-file-item input {
         cursor: pointer;
         flex-shrink: 0;
@@ -827,10 +887,10 @@
         </div>
       </div>
           
-          <div class="at-section">
-            <label for="at-custom-prompt" class="at-section-title">Custom Prompt</label>
-            <textarea id="at-custom-prompt" placeholder="Add custom instructions..."></textarea>
-          </div>
+      <div class="at-section">
+      <label for="at-custom-prompt" class="at-section-title">Custom Prompt <span id="at-char-count" style="font-weight: 400; color: var(--at-text-dim);">(0)</span></label>
+      <textarea id="at-custom-prompt" placeholder="Add custom instructions..."></textarea>
+    </div>
           
           <div class="at-section">
           <label for="at-file-search-input" class="at-section-title">Project Files <span id="at-server-status" style="font-weight: 400; color: #ef4444;"></span></label>
@@ -912,7 +972,7 @@
     });
   }
 
-  function renderFileList() {
+  async function renderFileList() {
     const container = document.getElementById('at-file-list');
     container.innerHTML = '';
 
@@ -923,34 +983,39 @@
       return;
     }
 
-    state.foundFiles.forEach(filePath => {
+    for (const filePath of state.foundFiles) {
       const isDirectory = filePath.endsWith('/');
       const cleanPath = isDirectory ? filePath.slice(0, -1) : filePath;
       const isSelected = state.selectedFiles.has(cleanPath);
       const isEnabled = state.enabledFiles.has(cleanPath);
+      const isFolderFull = isDirectory ? await isFolderFullySelected(cleanPath) : false;
 
       const parts = cleanPath.split(/[/\\]/);
       const name = parts.pop() || cleanPath;
       const dirPath = parts.join('/');
 
       const item = document.createElement('div');
-      item.className = 'at-file-item';
+      item.className = 'at-file-item' + (isFolderFull ? ' folder-selected' : '');
       item.dataset.path = cleanPath;
       item.dataset.type = isDirectory ? 'folder' : 'file';
 
-      // EDITED: Checkbox = selected+enabled, Circle = selected+disabled
+      // Checkbox: checked if selected (regardless of enabled state)
+      const checkboxChecked = isSelected || isFolderFull;
+
+      // Circle: show as active (filled) when enabled, empty when disabled
+      const circleActive = isEnabled;
+
       item.innerHTML = `
-        <input type="checkbox" class="at-file-toggle-on" data-path="${cleanPath}" ${isSelected && isEnabled ? 'checked' : ''} title="Select & enable">
+        <input type="checkbox" class="at-file-toggle-on" data-path="${cleanPath}" ${checkboxChecked ? 'checked' : ''} title="Select/deselect file">
         <strong>${isDirectory ? '📁' : '📄'} ${name}</strong>
         <div class="at-file-item-controls">
           <span class="at-file-item-path">${dirPath}</span>
-          <span class="at-file-select-off ${isSelected && !isEnabled ? 'active' : ''}" data-path="${cleanPath}" data-type="${isDirectory ? 'folder' : 'file'}" title="Select & disable"></span>
+          <span class="at-file-select-off ${circleActive ? 'active' : ''}" data-path="${cleanPath}" data-type="${isDirectory ? 'folder' : 'file'}" title="Toggle on/off"></span>
         </div>
       `;
       container.appendChild(item);
-    });
+    }
   }
-
   async function renderSelectedFiles() { // EDITED
     const container = document.getElementById('at-selected-files');
     const statsEl = document.getElementById('at-selected-stats');
@@ -998,15 +1063,22 @@
       statsEl.innerHTML = `(${enabledCount}/${totalCount}, <strong>${totalLines.toLocaleString()}</strong> lines)`;
     }
   }
-  function updateAllUI() {
+  async function updateAllUI() { // EDITED: async to await renderFileList
     renderAppSelector();
     renderPromptSelector();
-    renderFileList();
-    renderSelectedFiles();
-    updateFileSearchState(); // EDITED: Apply server status to UI
+    await renderFileList(); // EDITED: await for folder state checks
+    await renderSelectedFiles(); // EDITED: already async, now awaited here
+    updateFileSearchState();
 
-    document.getElementById('at-custom-prompt').value = state.customPrompt;
+    const customPromptEl = document.getElementById('at-custom-prompt');
+    customPromptEl.value = state.customPrompt;
+    const charCount = state.customPrompt.length;
+    const countEl = document.getElementById('at-char-count');
+    if (countEl) {
+      countEl.textContent = `(${charCount.toLocaleString()})`;
+    }
     document.getElementById('at-modal').dataset.visible = state.isModalVisible;
+
     document.getElementById('at-toggle-modal').textContent = state.isModalVisible ? '−' : '+';
     document.getElementById('at-once-checkbox').checked = state.onceMode;
   }
@@ -1090,8 +1162,18 @@
     });
 
     // Custom Prompt
+    document.getElementById('at-custom-prompt').addEventListener('focus', () => {
+      state.isSearchFocused = true;
+      document.getElementById('at-modal').classList.add('search-focused');
+    });
+
     document.getElementById('at-custom-prompt').addEventListener('input', (e) => {
       state.customPrompt = e.target.value;
+      const charCount = state.customPrompt.length;
+      const countEl = document.getElementById('at-char-count');
+      if (countEl) {
+        countEl.textContent = `(${charCount.toLocaleString()})`;
+      }
       saveState();
     });
 
@@ -1149,7 +1231,6 @@
       debouncedSearch(query);
     });
 
-    // File Selection
     document.getElementById('at-file-list').addEventListener('click', async (e) => {
       const item = e.target.closest('.at-file-item');
       if (!item) return;
@@ -1157,12 +1238,12 @@
       const path = item.dataset.path;
       const type = item.dataset.type;
       const checkboxOn = item.querySelector('.at-file-toggle-on');
-      const circleOff = item.querySelector('.at-file-select-off');
 
-      // EDITED: Handle checkbox click (select + enable)
+      // Checkbox click: toggle selection (always enable when adding)
       if (e.target.classList.contains('at-file-toggle-on')) {
+        e.stopPropagation();
         const isChecked = checkboxOn.checked;
-        
+
         if (type === 'file') {
           if (isChecked) {
             state.selectedFiles.add(path);
@@ -1171,65 +1252,97 @@
             state.selectedFiles.delete(path);
             state.enabledFiles.delete(path);
           }
-          renderFileList();
-          renderSelectedFiles();
-          saveState();
-        } else if (type === 'folder') {
-          await handleFolderToggle(path, isChecked, true); // true = enable
-          renderFileList();
-          renderSelectedFiles();
-        }
-        return;
-      }
-
-      // EDITED: Handle circle click (select + disable, or toggle enabled state)
-      if (e.target.classList.contains('at-file-select-off')) {
-        const targetPath = e.target.dataset.path;
-        const targetType = e.target.dataset.type;
-
-        if (targetType === 'file') {
-          if (!state.selectedFiles.has(targetPath)) {
-            // Not selected: select but disable
-            state.selectedFiles.add(targetPath);
-            state.enabledFiles.delete(targetPath);
-          } else if (state.enabledFiles.has(targetPath)) {
-            // Selected+enabled: switch to disabled
-            state.enabledFiles.delete(targetPath);
-          } else {
-            // Selected+disabled: deselect entirely
-            state.selectedFiles.delete(targetPath);
-          }
-          renderFileList();
-          renderSelectedFiles();
-          saveState();
-        } else if (targetType === 'folder') {
-          await handleFolderToggle(targetPath, true, false); // false = disable
-          renderFileList();
-          renderSelectedFiles();
-        }
-        return;
-      }
-
-      // EDITED: Clicking on file name/icon toggles checkbox behavior
-      if (e.target.tagName === 'STRONG' || e.target.closest('strong')) {
-        checkboxOn.checked = !checkboxOn.checked;
-        const isChecked = checkboxOn.checked;
-        
-        if (type === 'file') {
-          if (isChecked) {
-            state.selectedFiles.add(path);
-            state.enabledFiles.add(path);
-          } else {
-            state.selectedFiles.delete(path);
-            state.enabledFiles.delete(path);
-          }
-          renderFileList();
-          renderSelectedFiles();
+          await renderFileList();
+          await renderSelectedFiles();
           saveState();
         } else if (type === 'folder') {
           await handleFolderToggle(path, isChecked, true);
-          renderFileList();
-          renderSelectedFiles();
+          await renderFileList();
+          await renderSelectedFiles();
+          saveState();
+        }
+        return;
+      }
+
+      // Circle click: toggle enabled/disabled (same as Selected Files section)
+      if (e.target.classList.contains('at-file-select-off')) {
+        e.stopPropagation();
+
+        if (type === 'file') {
+          // If not selected, add it but disabled
+          if (!state.selectedFiles.has(path)) {
+            state.selectedFiles.add(path);
+            // Don't add to enabledFiles - leave disabled
+          } else {
+            // Already selected: toggle enabled state
+            if (state.enabledFiles.has(path)) {
+              state.enabledFiles.delete(path);
+            } else {
+              state.enabledFiles.add(path);
+            }
+          }
+          await renderFileList();
+          await renderSelectedFiles();
+          saveState();
+        } else if (type === 'folder') {
+          // For folders: toggle all files' enabled state
+          try {
+            const url = `http://localhost:12345/folder-contents?path=${encodeURIComponent(path)}`;
+            const response = await fetch(url);
+            if (response.ok) {
+              const filesInFolder = await response.json();
+              const allSelected = filesInFolder.every(f => state.selectedFiles.has(f));
+
+              if (!allSelected) {
+                // Some files not selected: select all but disabled
+                filesInFolder.forEach(f => {
+                  state.selectedFiles.add(f);
+                  state.enabledFiles.delete(f);
+                });
+              } else {
+                // All selected: toggle enabled state
+                const allEnabled = filesInFolder.every(f => state.enabledFiles.has(f));
+                filesInFolder.forEach(f => {
+                  if (allEnabled) {
+                    state.enabledFiles.delete(f);
+                  } else {
+                    state.enabledFiles.add(f);
+                  }
+                });
+              }
+              await renderFileList();
+              await renderSelectedFiles();
+              saveState();
+            }
+          } catch (err) {
+            console.error('🐯 AlbinoTiger: Error toggling folder:', err);
+          }
+        }
+        return;
+      }
+
+      // Clicking on file name/icon: same as checkbox
+      if (e.target.tagName === 'STRONG' || e.target.closest('strong')) {
+        e.stopPropagation();
+        checkboxOn.checked = !checkboxOn.checked;
+        const isChecked = checkboxOn.checked;
+
+        if (type === 'file') {
+          if (isChecked) {
+            state.selectedFiles.add(path);
+            state.enabledFiles.add(path);
+          } else {
+            state.selectedFiles.delete(path);
+            state.enabledFiles.delete(path);
+          }
+          await renderFileList();
+          await renderSelectedFiles();
+          saveState();
+        } else if (type === 'folder') {
+          await handleFolderToggle(path, isChecked, true);
+          await renderFileList();
+          await renderSelectedFiles();
+          saveState();
         }
       }
     });
@@ -1340,7 +1453,7 @@
     }
   }
 
-  async function handleFolderToggle(folderPath, isChecked, enableFiles = true) { // EDITED: Added enableFiles param
+  async function handleFolderToggle(folderPath, isChecked, enableFiles = true) {
     try {
       console.log(`🐯 AlbinoTiger: Fetching contents for folder: ${folderPath}`);
       const url = `http://localhost:12345/folder-contents?path=${encodeURIComponent(folderPath)}`;
@@ -1354,16 +1467,17 @@
       console.log(`🐯 AlbinoTiger: Folder contains ${filesInFolder.length} files.`);
 
       if (isChecked) {
+        // EDITED: Toggle ON - add files to both selected and enabled (or just selected if enableFiles=false)
         filesInFolder.forEach(file => {
           state.selectedFiles.add(file);
           if (enableFiles) {
             state.enabledFiles.add(file);
-          } else {
-            state.enabledFiles.delete(file); // EDITED: Select but keep disabled
           }
+          // Note: if enableFiles is false, we don't touch enabledFiles, leaving file disabled
         });
         console.log(`🐯 AlbinoTiger: Added ${filesInFolder.length} files (enabled: ${enableFiles}).`);
       } else {
+        // EDITED: Toggle OFF - remove from both selected and enabled
         filesInFolder.forEach(file => {
           state.selectedFiles.delete(file);
           state.enabledFiles.delete(file);
@@ -1400,7 +1514,7 @@
     }
   }
 
-  async function onGoButtonClick(autoSend = true) { // EDITED: Added autoSend param
+  async function onGoButtonClick(autoSend = true) { // EDITED
     console.log('🐯 AlbinoTiger: ===== GO BUTTON CLICKED =====');
     console.log('🐯 AlbinoTiger: Auto-send:', autoSend);
 
@@ -1409,14 +1523,32 @@
     document.getElementById('at-modal').classList.remove('search-focused');
 
     const finalPrompt = [];
+    const hasCustomPrompt = state.customPrompt.trim().length > 0; // EDITED
+    const hasAppPrompts = state.toggledPrompts.size > 0; // EDITED
 
     // 1. Add Custom Prompt
-    if (state.customPrompt.trim()) {
+    if (hasCustomPrompt) { // EDITED
       console.log('🐯 AlbinoTiger: Adding custom prompt');
       finalPrompt.push(state.customPrompt.trim());
     }
 
-    // 2. Add Predefined Prompts // EDITED: Updated for new structure
+    // EDITED: Add authority divider if both custom and app prompts exist
+    if (hasCustomPrompt && hasAppPrompts) { // EDITED
+      const divider = [
+        '====================',
+        '',
+        '⚠️  **PROMPT AUTHORITY NOTICE**',
+        '',
+        'The CUSTOM PROMPT above has **ultimate authority** over the context prompt below.',
+        'Should any contradictions arise between them, follow the custom prompt\'s instructions.',
+        '',
+        '===================='
+      ].join('\n');
+      finalPrompt.push(divider);
+      console.log('🐯 AlbinoTiger: Added authority divider');
+    } // EDITED
+
+    // 2. Add Predefined Prompts
     const appConfig = PROMPT_LIBRARY[state.currentApp];
     const currentAppPrompts = appConfig?.prompts || [];
     for (const promptId of state.toggledPrompts) {
@@ -1428,401 +1560,369 @@
       }
     }
 
-    // 3. Add Files (fetched fresh every time)
-    if (state.enabledFiles.size > 0) {
-      console.log('🐯 AlbinoTiger: Fetching', state.enabledFiles.size, 'enabled files');
-      const fileContents = [];
-      const sortedFiles = Array.from(state.enabledFiles).sort(); // EDITED: Use enabledFiles
+    // ...WITH THIS:
+    function pasteTextIntoChat(text, autoSend = true) {
+      console.log('🐯 AlbinoTiger: ===== ATTEMPTING TO PASTE =====');
+      console.log('🐯 AlbinoTiger: Text length:', text.length);
 
-      for (const filePath of sortedFiles) {
-        const content = await getFileContent(filePath);
-        if (content) {
-          fileContents.push(
-            `--- START FILE: ${filePath} ---\n\n${content}\n\n--- END FILE: ${filePath} ---`
-          );
-        }
-      }
-      finalPrompt.push(...fileContents);
-    }
+      // EDITED: Site-specific and general selectors ordered by priority
+      const selectors = [
+        // ChatGPT specific
+        '#prompt-textarea',
+        'div[id="prompt-textarea"]',
+        // Claude specific
+        'div.ProseMirror[contenteditable="true"]',
+        // Gemini specific
+        'rich-textarea div[contenteditable="true"]',
+        // Perplexity
+        'textarea[placeholder*="Ask"]',
+        // General fallbacks
+        'div[contenteditable="true"][data-placeholder]',
+        'div[contenteditable="true"]',
+        'div.ProseMirror',
+        'textarea[placeholder*="Reply"]',
+        'textarea[placeholder*="Message"]',
+        'textarea[placeholder*="message"]',
+        'textarea[placeholder*="Chat"]',
+        'textarea[placeholder*="Ask"]',
+        'textarea[placeholder*="Type"]',
+        'textarea[data-id="root"]',
+        'div[role="textbox"]',
+        'textarea',
+      ];
 
-    if (finalPrompt.length === 0) {
-      console.log('🐯 AlbinoTiger: No content to paste');
-      alert('AlbinoTiger: No prompts or files selected.');
-      return;
-    }
+      console.log('🐯 AlbinoTiger: Checking selectors...');
 
-    const combinedPrompt = finalPrompt.join('\n\n====================\n\n');
-    console.log('🐯 AlbinoTiger: Final prompt created, length:', combinedPrompt.length);
-    console.log('🐯 AlbinoTiger: First 200 chars:', combinedPrompt.substring(0, 200));
+      let target = null;
+      for (const selector of selectors) {
+        try {
+          const elements = document.querySelectorAll(selector);
+          console.log(`🐯 AlbinoTiger: Selector "${selector}" found ${elements.length} elements`);
 
-    pasteTextIntoChat(combinedPrompt, autoSend); // EDITED: Pass autoSend
-  }
+          // EDITED: Find visible, non-disabled element
+          for (const el of elements) {
+            const rect = el.getBoundingClientRect();
+            const isVisible = rect.width > 0 && rect.height > 0;
+            const isDisabled = el.disabled || el.getAttribute('aria-disabled') === 'true';
 
-
-  // ...WITH THIS:
-  function pasteTextIntoChat(text, autoSend = true) {
-    console.log('🐯 AlbinoTiger: ===== ATTEMPTING TO PASTE =====');
-    console.log('🐯 AlbinoTiger: Text length:', text.length);
-
-    // EDITED: Site-specific and general selectors ordered by priority
-    const selectors = [
-      // ChatGPT specific
-      '#prompt-textarea',
-      'div[id="prompt-textarea"]',
-      // Claude specific
-      'div.ProseMirror[contenteditable="true"]',
-      // Gemini specific
-      'rich-textarea div[contenteditable="true"]',
-      // Perplexity
-      'textarea[placeholder*="Ask"]',
-      // General fallbacks
-      'div[contenteditable="true"][data-placeholder]',
-      'div[contenteditable="true"]',
-      'div.ProseMirror',
-      'textarea[placeholder*="Reply"]',
-      'textarea[placeholder*="Message"]',
-      'textarea[placeholder*="message"]',
-      'textarea[placeholder*="Chat"]',
-      'textarea[placeholder*="Ask"]',
-      'textarea[placeholder*="Type"]',
-      'textarea[data-id="root"]',
-      'div[role="textbox"]',
-      'textarea',
-    ];
-
-    console.log('🐯 AlbinoTiger: Checking selectors...');
-
-    let target = null;
-    for (const selector of selectors) {
-      try {
-        const elements = document.querySelectorAll(selector);
-        console.log(`🐯 AlbinoTiger: Selector "${selector}" found ${elements.length} elements`);
-
-        // EDITED: Find visible, non-disabled element
-        for (const el of elements) {
-          const rect = el.getBoundingClientRect();
-          const isVisible = rect.width > 0 && rect.height > 0;
-          const isDisabled = el.disabled || el.getAttribute('aria-disabled') === 'true';
-
-          if (isVisible && !isDisabled) {
-            target = el;
-            console.log('🐯 AlbinoTiger: ✓ Found visible target with selector:', selector);
-            break;
+            if (isVisible && !isDisabled) {
+              target = el;
+              console.log('🐯 AlbinoTiger: ✓ Found visible target with selector:', selector);
+              break;
+            }
           }
+          if (target) break;
+        } catch (e) {
+          console.log(`🐯 AlbinoTiger: Selector "${selector}" failed:`, e.message);
         }
-        if (target) break;
-      } catch (e) {
-        console.log(`🐯 AlbinoTiger: Selector "${selector}" failed:`, e.message);
       }
-    }
 
-    if (!target) {
-      console.error('🐯 AlbinoTiger: ✗ Could not find chat input');
-      alert('AlbinoTiger Error: Could not find the chat input. Please click on the chat box and try again.');
-      return;
-    }
+      if (!target) {
+        console.error('🐯 AlbinoTiger: ✗ Could not find chat input');
+        alert('AlbinoTiger Error: Could not find the chat input. Please click on the chat box and try again.');
+        return;
+      }
 
-    console.log('🐯 AlbinoTiger: Target tagName:', target.tagName);
-    console.log('🐯 AlbinoTiger: Target contentEditable:', target.contentEditable);
-    console.log('🐯 AlbinoTiger: Target id:', target.id);
+      console.log('🐯 AlbinoTiger: Target tagName:', target.tagName);
+      console.log('🐯 AlbinoTiger: Target contentEditable:', target.contentEditable);
+      console.log('🐯 AlbinoTiger: Target id:', target.id);
 
-    // EDITED: Click and focus to ensure element is active
-    target.click();
-    target.focus();
+      // EDITED: Click and focus to ensure element is active
+      target.click();
+      target.focus();
 
-    // EDITED: Handle different input types
-    const isContentEditable = target.contentEditable === 'true' || target.classList.contains('ProseMirror');
-    const isTextarea = target.tagName.toLowerCase() === 'textarea';
+      // EDITED: Handle different input types
+      const isContentEditable = target.contentEditable === 'true' || target.classList.contains('ProseMirror');
+      const isTextarea = target.tagName.toLowerCase() === 'textarea';
 
-    if (isContentEditable) {
-      console.log('🐯 AlbinoTiger: Target is contenteditable');
+      if (isContentEditable) {
+        console.log('🐯 AlbinoTiger: Target is contenteditable');
 
-      // EDITED: Clear existing content first
-      target.innerHTML = '';
+        // EDITED: Clear existing content first
+        target.innerHTML = '';
 
-      // EDITED: For ChatGPT's #prompt-textarea, use paragraph structure
-      if (target.id === 'prompt-textarea') {
-        const p = document.createElement('p');
-        p.textContent = text;
-        target.appendChild(p);
+        // EDITED: For ChatGPT's #prompt-textarea, use paragraph structure
+        if (target.id === 'prompt-textarea') {
+          const p = document.createElement('p');
+          p.textContent = text;
+          target.appendChild(p);
+        } else {
+          target.textContent = text;
+        }
+
+        // EDITED: Dispatch comprehensive events
+        ['focus', 'input', 'change', 'keydown', 'keyup'].forEach(eventType => {
+          target.dispatchEvent(new Event(eventType, { bubbles: true, cancelable: true }));
+        });
+
+        // EDITED: InputEvent for React/contenteditable
+        target.dispatchEvent(new InputEvent('input', {
+          bubbles: true,
+          cancelable: true,
+          inputType: 'insertText',
+          data: text
+        }));
+
+      } else if (isTextarea) {
+        console.log('🐯 AlbinoTiger: Target is textarea');
+
+        // EDITED: Set value using native setter to bypass React
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+          window.HTMLTextAreaElement.prototype, 'value'
+        )?.set;
+
+        if (nativeInputValueSetter) {
+          nativeInputValueSetter.call(target, text);
+        } else {
+          target.value = text;
+        }
+
+        // EDITED: Dispatch events
+        ['focus', 'input', 'change', 'keydown', 'keyup'].forEach(eventType => {
+          target.dispatchEvent(new Event(eventType, { bubbles: true, cancelable: true }));
+        });
       } else {
+        // Fallback
+        console.log('🐯 AlbinoTiger: Unknown target type, trying textContent');
         target.textContent = text;
+        target.dispatchEvent(new Event('input', { bubbles: true }));
       }
 
-      // EDITED: Dispatch comprehensive events
-      ['focus', 'input', 'change', 'keydown', 'keyup'].forEach(eventType => {
-        target.dispatchEvent(new Event(eventType, { bubbles: true, cancelable: true }));
-      });
+      console.log('🐯 AlbinoTiger: ✓ Text pasted successfully');
 
-      // EDITED: InputEvent for React/contenteditable
-      target.dispatchEvent(new InputEvent('input', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: text
-      }));
-
-    } else if (isTextarea) {
-      console.log('🐯 AlbinoTiger: Target is textarea');
-
-      // EDITED: Set value using native setter to bypass React
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype, 'value'
-      )?.set;
-
-      if (nativeInputValueSetter) {
-        nativeInputValueSetter.call(target, text);
-      } else {
-        target.value = text;
+      // EDITED: Auto-send if requested
+      if (autoSend) {
+        console.log('🐯 AlbinoTiger: Attempting to send message...');
+        setTimeout(() => {
+          sendMessage(target);
+        }, 150); // Slightly longer delay for React state updates
       }
 
-      // EDITED: Dispatch events
-      ['focus', 'input', 'change', 'keydown', 'keyup'].forEach(eventType => {
-        target.dispatchEvent(new Event(eventType, { bubbles: true, cancelable: true }));
-      });
-    } else {
-      // Fallback
-      console.log('🐯 AlbinoTiger: Unknown target type, trying textContent');
-      target.textContent = text;
-      target.dispatchEvent(new Event('input', { bubbles: true }));
+      // Reset prompt if Once mode is enabled
+      if (state.onceMode) {
+        if (state.toggledPrompts.size > 0) {
+          state.toggledPrompts.clear();
+          renderPromptSelector();
+          console.log('🐯 AlbinoTiger: Once mode - prompt reset to None');
+        }
+        if (state.enabledFiles.size > 0) { // EDITED: Disable all files
+          state.enabledFiles.clear();
+          renderSelectedFiles();
+          console.log('🐯 AlbinoTiger: Once mode - all files disabled');
+        }
+        saveState();
+      }
     }
 
-    console.log('🐯 AlbinoTiger: ✓ Text pasted successfully');
+    // ...WITH THIS:
+    function sendMessage(target) {
+      console.log('🐯 AlbinoTiger: ===== ATTEMPTING TO SEND =====');
 
-    // EDITED: Auto-send if requested
-    if (autoSend) {
-      console.log('🐯 AlbinoTiger: Attempting to send message...');
-      setTimeout(() => {
-        sendMessage(target);
-      }, 150); // Slightly longer delay for React state updates
-    }
+      // EDITED: Site-specific and general send button selectors
+      const sendButtonSelectors = [
+        // ChatGPT specific
+        'button[data-testid="send-button"]',
+        'button[data-testid="composer-send-button"]',
+        'form button[type="submit"]',
+        // Claude specific
+        'button[aria-label="Send Message"]',
+        'button[aria-label="Send message"]',
+        // Gemini specific
+        'button[aria-label="Send message"]',
+        'button.send-button',
+        // Perplexity
+        'button[aria-label="Submit"]',
+        // Poe
+        'button[class*="SendButton"]',
+        // General
+        'button[aria-label="Send"]',
+        'button[aria-label="send"]',
+        'button[type="submit"]',
+        'button[class*="send"]',
+        'button[class*="Send"]',
+        // SVG icon buttons (arrow up typically means send)
+        'button svg[class*="icon"]',
+      ];
 
-    // Reset prompt if Once mode is enabled
-    if (state.onceMode) {
-      if (state.toggledPrompts.size > 0) {
-        state.toggledPrompts.clear();
-        renderPromptSelector();
-        console.log('🐯 AlbinoTiger: Once mode - prompt reset to None');
+      // EDITED: Try multiple approaches to find send button
+      for (const selector of sendButtonSelectors) {
+        try {
+          const elements = document.querySelectorAll(selector);
+          for (const el of elements) {
+            // Get the actual button (might be the element or its parent)
+            const btn = el.tagName === 'BUTTON' ? el : el.closest('button');
+            if (btn && !btn.disabled && btn.offsetParent !== null) {
+              const rect = btn.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0) {
+                console.log('🐯 AlbinoTiger: Found send button with selector:', selector);
+                btn.click();
+                console.log('🐯 AlbinoTiger: ✓ Clicked send button');
+                return;
+              }
+            }
+          }
+        } catch (e) {
+          // Continue to next selector
+        }
       }
-      if (state.enabledFiles.size > 0) { // EDITED: Disable all files
-        state.enabledFiles.clear();
-        renderSelectedFiles();
-        console.log('🐯 AlbinoTiger: Once mode - all files disabled');
-      }
-      saveState();
-    }
-  }
 
-  // ...WITH THIS:
-  function sendMessage(target) {
-    console.log('🐯 AlbinoTiger: ===== ATTEMPTING TO SEND =====');
-
-    // EDITED: Site-specific and general send button selectors
-    const sendButtonSelectors = [
-      // ChatGPT specific
-      'button[data-testid="send-button"]',
-      'button[data-testid="composer-send-button"]',
-      'form button[type="submit"]',
-      // Claude specific
-      'button[aria-label="Send Message"]',
-      'button[aria-label="Send message"]',
-      // Gemini specific
-      'button[aria-label="Send message"]',
-      'button.send-button',
-      // Perplexity
-      'button[aria-label="Submit"]',
-      // Poe
-      'button[class*="SendButton"]',
-      // General
-      'button[aria-label="Send"]',
-      'button[aria-label="send"]',
-      'button[type="submit"]',
-      'button[class*="send"]',
-      'button[class*="Send"]',
-      // SVG icon buttons (arrow up typically means send)
-      'button svg[class*="icon"]',
-    ];
-
-    // EDITED: Try multiple approaches to find send button
-    for (const selector of sendButtonSelectors) {
-      try {
-        const elements = document.querySelectorAll(selector);
-        for (const el of elements) {
-          // Get the actual button (might be the element or its parent)
-          const btn = el.tagName === 'BUTTON' ? el : el.closest('button');
-          if (btn && !btn.disabled && btn.offsetParent !== null) {
+      // EDITED: Try finding button near the input
+      const inputContainer = target.closest('form') || target.parentElement?.parentElement?.parentElement;
+      if (inputContainer) {
+        const nearbyButtons = inputContainer.querySelectorAll('button');
+        for (const btn of nearbyButtons) {
+          if (!btn.disabled && btn.offsetParent !== null) {
             const rect = btn.getBoundingClientRect();
-            if (rect.width > 0 && rect.height > 0) {
-              console.log('🐯 AlbinoTiger: Found send button with selector:', selector);
+            // Look for small-ish buttons (likely send buttons, not large action buttons)
+            if (rect.width > 0 && rect.width < 100 && rect.height > 0) {
+              console.log('🐯 AlbinoTiger: Found nearby button, attempting click');
               btn.click();
-              console.log('🐯 AlbinoTiger: ✓ Clicked send button');
+              console.log('🐯 AlbinoTiger: ✓ Clicked nearby button');
               return;
             }
           }
         }
-      } catch (e) {
-        // Continue to next selector
       }
+
+      // EDITED: Fallback - simulate Enter key with better event construction
+      console.log('🐯 AlbinoTiger: No send button found, simulating Enter key');
+
+      const enterDown = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      });
+
+      const enterPress = new KeyboardEvent('keypress', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      });
+
+      const enterUp = new KeyboardEvent('keyup', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
+        composed: true,
+      });
+
+      target.dispatchEvent(enterDown);
+      target.dispatchEvent(enterPress);
+      target.dispatchEvent(enterUp);
+
+      console.log('🐯 AlbinoTiger: ✓ Enter key events dispatched');
     }
 
-    // EDITED: Try finding button near the input
-    const inputContainer = target.closest('form') || target.parentElement?.parentElement?.parentElement;
-    if (inputContainer) {
-      const nearbyButtons = inputContainer.querySelectorAll('button');
-      for (const btn of nearbyButtons) {
-        if (!btn.disabled && btn.offsetParent !== null) {
-          const rect = btn.getBoundingClientRect();
-          // Look for small-ish buttons (likely send buttons, not large action buttons)
-          if (rect.width > 0 && rect.width < 100 && rect.height > 0) {
-            console.log('🐯 AlbinoTiger: Found nearby button, attempting click');
-            btn.click();
-            console.log('🐯 AlbinoTiger: ✓ Clicked nearby button');
-            return;
+
+    // ...WITH THIS:
+    // EDITED: Clear the chat input box
+    function clearChatInput() {
+      console.log('🐯 AlbinoTiger: ===== CLEARING CHAT INPUT =====');
+
+      // EDITED: Use same selectors as paste function
+      const selectors = [
+        '#prompt-textarea',
+        'div[id="prompt-textarea"]',
+        'div.ProseMirror[contenteditable="true"]',
+        'rich-textarea div[contenteditable="true"]',
+        'textarea[placeholder*="Ask"]',
+        'div[contenteditable="true"][data-placeholder]',
+        'div[contenteditable="true"]',
+        'div.ProseMirror',
+        'textarea[placeholder*="Reply"]',
+        'textarea[placeholder*="Message"]',
+        'textarea[placeholder*="message"]',
+        'textarea[placeholder*="Chat"]',
+        'textarea[placeholder*="Type"]',
+        'textarea[data-id="root"]',
+        'div[role="textbox"]',
+        'textarea',
+      ];
+
+      let target = null;
+      for (const selector of selectors) {
+        try {
+          const elements = document.querySelectorAll(selector);
+          for (const el of elements) {
+            const rect = el.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+              target = el;
+              break;
+            }
           }
+          if (target) break;
+        } catch (e) {
+          continue;
         }
       }
-    }
 
-    // EDITED: Fallback - simulate Enter key with better event construction
-    console.log('🐯 AlbinoTiger: No send button found, simulating Enter key');
+      if (!target) {
+        console.log('🐯 AlbinoTiger: No chat input found to clear');
+        return;
+      }
 
-    const enterDown = new KeyboardEvent('keydown', {
-      key: 'Enter',
-      code: 'Enter',
-      keyCode: 13,
-      which: 13,
-      bubbles: true,
-      cancelable: true,
-      composed: true,
-    });
+      target.click();
+      target.focus();
 
-    const enterPress = new KeyboardEvent('keypress', {
-      key: 'Enter',
-      code: 'Enter',
-      keyCode: 13,
-      which: 13,
-      bubbles: true,
-      cancelable: true,
-      composed: true,
-    });
+      const isContentEditable = target.contentEditable === 'true' || target.classList.contains('ProseMirror');
+      const isTextarea = target.tagName.toLowerCase() === 'textarea';
 
-    const enterUp = new KeyboardEvent('keyup', {
-      key: 'Enter',
-      code: 'Enter',
-      keyCode: 13,
-      which: 13,
-      bubbles: true,
-      composed: true,
-    });
-
-    target.dispatchEvent(enterDown);
-    target.dispatchEvent(enterPress);
-    target.dispatchEvent(enterUp);
-
-    console.log('🐯 AlbinoTiger: ✓ Enter key events dispatched');
-  }
-
-
-  // ...WITH THIS:
-  // EDITED: Clear the chat input box
-  function clearChatInput() {
-    console.log('🐯 AlbinoTiger: ===== CLEARING CHAT INPUT =====');
-
-    // EDITED: Use same selectors as paste function
-    const selectors = [
-      '#prompt-textarea',
-      'div[id="prompt-textarea"]',
-      'div.ProseMirror[contenteditable="true"]',
-      'rich-textarea div[contenteditable="true"]',
-      'textarea[placeholder*="Ask"]',
-      'div[contenteditable="true"][data-placeholder]',
-      'div[contenteditable="true"]',
-      'div.ProseMirror',
-      'textarea[placeholder*="Reply"]',
-      'textarea[placeholder*="Message"]',
-      'textarea[placeholder*="message"]',
-      'textarea[placeholder*="Chat"]',
-      'textarea[placeholder*="Type"]',
-      'textarea[data-id="root"]',
-      'div[role="textbox"]',
-      'textarea',
-    ];
-
-    let target = null;
-    for (const selector of selectors) {
-      try {
-        const elements = document.querySelectorAll(selector);
-        for (const el of elements) {
-          const rect = el.getBoundingClientRect();
-          if (rect.width > 0 && rect.height > 0) {
-            target = el;
-            break;
-          }
+      if (isContentEditable) {
+        target.innerHTML = '';
+        // EDITED: For ChatGPT, restore empty paragraph
+        if (target.id === 'prompt-textarea') {
+          target.innerHTML = '<p><br></p>';
         }
-        if (target) break;
-      } catch (e) {
-        continue;
-      }
-    }
-
-    if (!target) {
-      console.log('🐯 AlbinoTiger: No chat input found to clear');
-      return;
-    }
-
-    target.click();
-    target.focus();
-
-    const isContentEditable = target.contentEditable === 'true' || target.classList.contains('ProseMirror');
-    const isTextarea = target.tagName.toLowerCase() === 'textarea';
-
-    if (isContentEditable) {
-      target.innerHTML = '';
-      // EDITED: For ChatGPT, restore empty paragraph
-      if (target.id === 'prompt-textarea') {
-        target.innerHTML = '<p><br></p>';
-      }
-    } else if (isTextarea) {
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype, 'value'
-      )?.set;
-      if (nativeInputValueSetter) {
-        nativeInputValueSetter.call(target, '');
+      } else if (isTextarea) {
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+          window.HTMLTextAreaElement.prototype, 'value'
+        )?.set;
+        if (nativeInputValueSetter) {
+          nativeInputValueSetter.call(target, '');
+        } else {
+          target.value = '';
+        }
       } else {
-        target.value = '';
+        target.textContent = '';
       }
-    } else {
-      target.textContent = '';
+
+      // Dispatch events to notify the site
+      ['focus', 'input', 'change'].forEach(eventType => {
+        target.dispatchEvent(new Event(eventType, { bubbles: true }));
+      });
+
+      console.log('🐯 AlbinoTiger: ✓ Chat input cleared');
     }
 
-    // Dispatch events to notify the site
-    ['focus', 'input', 'change'].forEach(eventType => {
-      target.dispatchEvent(new Event(eventType, { bubbles: true }));
-    });
+    // 6. --- INITIALIZATION ---
 
-    console.log('🐯 AlbinoTiger: ✓ Chat input cleared');
-  }
+    async function initialize() { // EDITED: async to await loadState
+      console.log('🐯 AlbinoTiger: Initializing...');
+      await loadState(); // EDITED: await for storage API
+      injectUI();
+      updateAllUI();
+      addListeners();
 
-  // 6. --- INITIALIZATION ---
+      checkServerStatus();
+      setInterval(checkServerStatus, 5000);
 
-  function initialize() {
-    console.log('🐯 AlbinoTiger: Initializing...');
-    loadState();
-    injectUI();
-    updateAllUI();
-    addListeners();
+      console.log('🐯 AlbinoTiger: ✓ Initialization complete');
+    }
 
-    // EDITED: Check server status on load and periodically
-    checkServerStatus();
-    setInterval(checkServerStatus, 5000); // Check every 5 seconds
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      initialize();
+    } else {
+      window.addEventListener('DOMContentLoaded', initialize);
+    }
 
-    console.log('🐯 AlbinoTiger: ✓ Initialization complete');
-  }
-
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    initialize();
-  } else {
-    window.addEventListener('DOMContentLoaded', initialize);
-  }
-
-})();
+  }) ();
