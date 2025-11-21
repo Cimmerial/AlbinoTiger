@@ -10,25 +10,30 @@
   // 1. --- STATE & CONFIGURATION ---
 
   const PROMPT_LIBRARY = {
-    'AlbinoTigerDev': {
+    'AlbinoTiger': {
       rootDir: 'AlbinoTiger', // EDITED: Per-app root directory
       prompts: [
         { id: 'dev_thorough', label: 'Thorough', file: 'at-dev-thorough.md' },
         { id: 'dev_quick', label: 'Quick', file: 'at-dev-quick.md' },
       ],
     },
+    // general (writing in my voice, code question, explaination of school related topic)
+    // retro-royale
+    // juician
+    // cyanotype
   };
 
   // Load state from localStorage
   let state = {
-    currentApp: 'AlbinoTigerDev',
+    currentApp: 'AlbinoTiger',
     customPrompt: '',
     toggledPrompts: new Set(),
     foundFiles: [],
     selectedFiles: new Set(),
+    enabledFiles: new Set(), // EDITED: Track which selected files are enabled for pasting
     isModalVisible: true,
     isSearchFocused: false,
-    onceMode: false, // EDITED: Reset prompt after GO
+    onceMode: false,
   };
   // Cache for loaded prompts to avoid re-fetching
   // Cache for loaded prompts (cleared on each page load to pick up changes)
@@ -73,18 +78,18 @@
     return { match: false, priority: 999 };
   }
 
-  // Load saved state
   function loadState() {
     try {
       const saved = localStorage.getItem('albinoTiger_state');
       if (saved) {
         const parsed = JSON.parse(saved);
-        state.currentApp = parsed.currentApp || 'AlbinoTigerDev'; // EDITED
+        state.currentApp = parsed.currentApp || 'AlbinoTiger';
         state.customPrompt = parsed.customPrompt || '';
         state.toggledPrompts = new Set(parsed.toggledPrompts || []);
         state.selectedFiles = new Set(parsed.selectedFiles || []);
+        state.enabledFiles = new Set(parsed.enabledFiles || parsed.selectedFiles || []); // EDITED: Default to all enabled
         state.isModalVisible = parsed.isModalVisible !== undefined ? parsed.isModalVisible : true;
-        state.onceMode = parsed.onceMode || false; // EDITED
+        state.onceMode = parsed.onceMode || false;
         console.log('🐯 AlbinoTiger: State loaded from localStorage', state);
       }
     } catch (e) {
@@ -100,8 +105,9 @@
         customPrompt: state.customPrompt,
         toggledPrompts: Array.from(state.toggledPrompts),
         selectedFiles: Array.from(state.selectedFiles),
+        enabledFiles: Array.from(state.enabledFiles), // EDITED
         isModalVisible: state.isModalVisible,
-        onceMode: state.onceMode, // EDITED
+        onceMode: state.onceMode,
       }));
       console.log('🐯 AlbinoTiger: State saved');
     } catch (e) {
@@ -142,25 +148,25 @@
     console.log('🐯 AlbinoTiger: Injecting UI');
 
     const styles = `
-      :root {
-        --at-primary: #0ea5e9;
-        --at-primary-dark: #0284c7;
-        --at-primary-light: #38bdf8;
-        --at-bg: #0f172a;
-        --at-bg-alt: #1e293b;
-        --at-bg-light: #334155;
-        --at-text: #e2e8f0;
-        --at-text-dim: #94a3b8;
-        --at-border: #334155;
-        --at-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-      }
+    :root { /* EDITED */
+    --at-primary: #f59e0b; /* EDITED: Amber/yellow */
+    --at-primary-dark: #d97706; /* EDITED */
+    --at-primary-light: #fbbf24; /* EDITED */
+    --at-bg: #18181b; /* EDITED: Near black */
+    --at-bg-alt: #27272a; /* EDITED: Dark zinc */
+    --at-bg-light: #3f3f46; /* EDITED */
+    --at-text: #fafafa; /* EDITED: Bright white */
+    --at-text-dim: #a1a1aa; /* EDITED: Zinc gray */
+    --at-border: #3f3f46; /* EDITED */
+    --at-shadow: 0 4px 20px rgba(0, 0, 0, 0.6); /* EDITED */
+  }
       
-      #at-modal {
-        position: fixed;
-        bottom: 16px;
-        right: 16px;
-        width: 300px;
-        max-height: 480px;
+  #at-modal { /* EDITED */
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  width: 300px;
+  max-height: 552px; 
         background: var(--at-bg);
         border: 2px solid var(--at-border);
         border-radius: 12px;
@@ -172,12 +178,17 @@
         display: flex;
         flex-direction: column;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        user-select: none;
       }
       
-      #at-modal.search-focused {
-        width: 500px;
-        max-height: 600px;
+      #at-custom-prompt {
+        user-select: text;
       }
+      
+      #at-modal.search-focused { /* EDITED */
+      width: 500px;
+      max-height: 690px; /* EDITED: 600 * 1.15 = 690 */
+    }
       
       #at-modal[data-visible="false"] {
         width: auto;
@@ -195,50 +206,51 @@
         border-radius: 10px;
       }
 
-      #at-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px 12px;
-        border-bottom: 2px solid var(--at-border);
-        background: linear-gradient(135deg, var(--at-primary) 0%, var(--at-primary-dark) 100%);
-        border-radius: 10px 10px 0 0;
-        cursor: pointer;
-        user-select: none;
-        min-height: 20px;
-      }
+      #at-header { /* EDITED */
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 2px solid #f59e0b; /* EDITED: Yellow border */
+      background: #0a0a0a; /* EDITED: Black background */
+      border-radius: 10px 10px 0 0;
+      cursor: pointer;
+      user-select: none;
+      min-height: 20px;
+    }
       
-      #at-header h3 {
-        margin: 0;
-        margin-right: 8px;
-        font-size: 13px;
-        font-weight: 700;
-        color: white;
-        letter-spacing: 0.5px;
-        line-height: 1;
-      }
+    #at-header h3 { /* EDITED */
+    margin: 0;
+    margin-right: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fbbf24;
+    letter-spacing: 0.5px;
+    line-height: 1;
+    font-family: "Courier New", Courier, "Lucida Console", Monaco, monospace; /* EDITED: Universal monospace */
+  }
       
-      #at-toggle-modal {
-        cursor: pointer;
-        font-weight: bold;
-        width: 20px;
-        height: 20px;
-        border-radius: 4px;
-        background: rgba(255, 255, 255, 0.2);
-        color: white;
-        font-size: 14px;
-        transition: all 0.2s;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 1;
-        flex-shrink: 0;
-      }
-      
-      #at-toggle-modal:hover {  
-        background: rgba(255, 255, 255, 0.3);
-        transform: scale(1.1);
-      }
+  #at-toggle-modal { /* EDITED */
+  cursor: pointer;
+  font-weight: bold;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: rgba(251, 191, 36, 0.2); /* EDITED: Yellow tint */
+  color: #fbbf24; /* EDITED: Yellow */
+  font-size: 14px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  flex-shrink: 0;
+}
+       
+#at-toggle-modal:hover { /* EDITED */
+  background: rgba(251, 191, 36, 0.4); /* EDITED */
+  transform: scale(1.1);
+}
 
       #at-body {
         padding: 12px;
@@ -276,10 +288,14 @@
         min-width: 0;
       }
       
-      #at-app-selector,
-      #at-prompt-selector {
+      .at-dropdown {
+        position: relative;
         width: 100%;
-        padding: 5px 7px;
+      }
+      
+      .at-dropdown-selected {
+        width: 100%;
+        padding: 6px 24px 6px 8px;
         border-radius: 6px;
         border: 1px solid var(--at-border);
         background: var(--at-bg-alt);
@@ -288,13 +304,84 @@
         font-weight: 500;
         cursor: pointer;
         transition: all 0.2s;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        box-sizing: border-box;
       }
       
-      #at-app-selector:focus,
-      #at-prompt-selector:focus {
-        outline: none;
+      .at-dropdown-selected::after {
+        content: '';
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        border: 4px solid transparent;
+        border-top-color: var(--at-text-dim);
+        pointer-events: none;
+      }
+      
+      .at-dropdown.open .at-dropdown-selected::after {
+        border-top-color: transparent;
+        border-bottom-color: var(--at-text-dim);
+        transform: translateY(-80%);
+      }
+      
+      .at-dropdown-selected:hover {
+        border-color: var(--at-primary);
+      }
+      
+      .at-dropdown.open .at-dropdown-selected {
         border-color: var(--at-primary);
         box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
+      }
+      
+      .at-dropdown-options {
+        display: none;
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        background: var(--at-bg-alt);
+        border: 1px solid var(--at-border);
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        z-index: 1000;
+        max-height: 150px;
+        overflow-y: auto;
+      }
+      
+      .at-dropdown.open .at-dropdown-options {
+        display: block;
+      }
+      
+      .at-dropdown-option {
+        padding: 6px 8px;
+        font-size: 11px;
+        color: var(--at-text);
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      
+      .at-dropdown-option:hover {
+        background: var(--at-bg-light);
+      }
+      
+      .at-dropdown-option.selected {
+        background: var(--at-primary);
+        color: white;
+      }
+      
+      .at-dropdown-option:first-child {
+        border-radius: 5px 5px 0 0;
+      }
+      
+      .at-dropdown-option:last-child {
+        border-radius: 0 0 5px 5px;
+      }
+      
+      .at-dropdown-option:only-child {
+        border-radius: 5px;
       }
       
       .at-once-toggle { /* EDITED */
@@ -318,9 +405,9 @@
       height: 14px;
     }
       
-      #at-custom-prompt {
+    #at-custom-prompt { /* EDITED */
         width: 100%;
-        min-height: 50px;
+        min-height: 75px; /* EDITED: 50 * 1.3 = 65 */
         padding: 7px 9px;
         border-radius: 6px;
         border: 1px solid var(--at-border);
@@ -425,24 +512,51 @@
         max-height: 100px;
         overflow-y: auto;
       }
-      
-      .at-selected-file-tag {
+
+      .at-selected-file-tag { /* EDITED */
         display: flex;
         align-items: center;
         gap: 6px;
         padding: 4px 8px;
-        background: var(--at-primary);
-        color: white;
+        background: #3f3f46;
+        color: #d4d4d8;
         border-radius: 4px;
         font-size: 10px;
         font-weight: 500;
         transition: all 0.2s;
+        border: 1px solid #52525b;
       }
-      
+
+      .at-selected-file-tag.disabled { /* EDITED: Dimmed when toggled off */
+        opacity: 0.4;
+        background: #27272a;
+      }
+                
       .at-selected-file-tag:hover {
-        background: var(--at-primary-light);
+        background: #52525b;
+        border-color: #71717a;
       }
-      
+
+      .at-selected-file-tag.disabled:hover { /* EDITED */
+        background: #3f3f46;
+      }
+
+      .at-file-toggle-btn { /* EDITED: Toggle bubble */
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid #71717a;
+        background: transparent;
+        cursor: pointer;
+        transition: all 0.2s;
+        flex-shrink: 0;
+      }
+
+      .at-file-toggle-btn.active { /* EDITED */
+        background: var(--at-primary);
+        border-color: var(--at-primary);
+      }
+
       .at-file-remove {
         cursor: pointer;
         font-weight: bold;
@@ -452,9 +566,10 @@
         opacity: 0.8;
         transition: opacity 0.2s;
       }
-      
+
       .at-file-remove:hover {
         opacity: 1;
+        color: #ef4444; /* EDITED: Red on hover */
       }
       
       #at-footer {
@@ -489,14 +604,15 @@
         transform: translateY(0);
       }
       
-      #at-go-button {
-        flex: 2;
-        background: linear-gradient(135deg, var(--at-primary) 0%, var(--at-primary-dark) 100%);
-      }
-      
-      #at-go-button:hover {
-        box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
-      }
+      #at-go-button { /* EDITED */
+      flex: 2;
+      background: linear-gradient(135deg, #b45309 0%, #92400e 100%); /* EDITED: Darker amber */
+    }
+           
+    #at-go-button:hover { /* EDITED */
+      box-shadow: 0 4px 12px rgba(180, 83, 9, 0.4); /* EDITED */
+      background: linear-gradient(135deg, #d97706 0%, #b45309 100%); /* EDITED */
+    }
       
       #at-slow-button {
         flex: 1;
@@ -557,25 +673,31 @@
     const modalHTML = `
       <div id="at-modal" data-visible="true">
       <div id="at-header">
-      <h3 style="display: flex; align-items: center; gap: 6px;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5c.67 0 1.35.09 2 .26 1.78-2 5.03-2.84 6.42-2.26 1.4.58-.42 7-.42 7 .57 1.07 1 2.24 1 3.44C21 17.9 16.97 21 12 21s-9-3-9-7.56c0-1.25.5-2.4 1-3.44 0 0-1.89-6.42-.5-7 1.39-.58 4.72.23 6.5 2.23A9.04 9.04 0 0 1 12 5Z"/><path d="M8 14v.5"/><path d="M16 14v.5"/><path d="M11.25 16.25h1.5L12 17l-.75-.75Z"/></svg>ALB1NO T1GER</h3>
+      <h3 style="display: flex; align-items: center; gap: 6px;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5c.67 0 1.35.09 2 .26 1.78-2 5.03-2.84 6.42-2.26 1.4.58-.42 7-.42 7 .57 1.07 1 2.24 1 3.44C21 17.9 16.97 21 12 21s-9-3-9-7.56c0-1.25.5-2.4 1-3.44 0 0-1.89-6.42-.5-7 1.39-.58 4.72.23 6.5 2.23A9.04 9.04 0 0 1 12 5Z"/><path d="M8 14v.5"/><path d="M16 14v.5"/><path d="M11.25 16.25h1.5L12 17l-.75-.75Z"/></svg>ALB1NO T1GER</h3>
       <div id="at-toggle-modal" title="Toggle Modal">−</div>
     </div>
         <div id="at-body">
         <div class="at-compact-row">
         <div class="at-section">
-          <label for="at-app-selector" class="at-section-title">App</label>
-          <select id="at-app-selector"></select>
+          <span class="at-section-title">App</span>
+          <div class="at-dropdown" id="at-app-dropdown">
+            <div class="at-dropdown-selected" id="at-app-selected">Select App</div>
+            <div class="at-dropdown-options" id="at-app-options"></div>
+          </div>
         </div>
         
         <div class="at-section">
-          <label for="at-prompt-selector" class="at-section-title">Prompts</label>
-          <select id="at-prompt-selector"></select>
+          <span class="at-section-title">Prompts</span>
+          <div class="at-dropdown" id="at-prompt-dropdown">
+            <div class="at-dropdown-selected" id="at-prompt-selected">None</div>
+            <div class="at-dropdown-options" id="at-prompt-options"></div>
+          </div>
         </div>
         
         <div class="at-once-toggle">
-        <span>Once</span>
-        <input type="checkbox" id="at-once-checkbox" title="Reset prompt to None after GO">
-      </div>
+          <span>Once</span>
+          <input type="checkbox" id="at-once-checkbox" title="Reset prompt to None & toggle selected scripts off after GO">
+        </div>
       </div>
           
           <div class="at-section">
@@ -592,7 +714,7 @@
           </div>
           
           <div class="at-section">
-            <label class="at-section-title">Selected Files</label>
+            <label class="at-section-title">Selected Files <span id="at-selected-stats" style="font-weight: 400; color: var(--at-text-dim);"></span></label> <!-- EDITED -->
             <div id="at-selected-files">
               <div style="width: 100%; text-align: center; color: var(--at-text-dim); font-size: 10px;">No files selected</div>
             </div>
@@ -615,46 +737,51 @@
   // 3. --- UI RENDERING & STATE UPDATES ---
 
   function renderAppSelector() {
-    const selector = document.getElementById('at-app-selector');
-    selector.innerHTML = '';
+    const selected = document.getElementById('at-app-selected');
+    const options = document.getElementById('at-app-options');
+    options.innerHTML = '';
+
+    selected.textContent = state.currentApp;
+
     Object.keys(PROMPT_LIBRARY).forEach(appName => {
-      const option = document.createElement('option');
-      option.value = appName;
-      option.innerText = appName;
-      if (appName === state.currentApp) {
-        option.selected = true;
-      }
-      selector.appendChild(option);
+      const option = document.createElement('div');
+      option.className = 'at-dropdown-option' + (appName === state.currentApp ? ' selected' : '');
+      option.dataset.value = appName;
+      option.textContent = appName;
+      options.appendChild(option);
     });
   }
 
   function renderPromptSelector() {
-    const selector = document.getElementById('at-prompt-selector');
-    selector.innerHTML = '';
-    const appConfig = PROMPT_LIBRARY[state.currentApp]; // EDITED
-    const prompts = appConfig?.prompts || []; // EDITED
+    const selected = document.getElementById('at-prompt-selected');
+    const options = document.getElementById('at-prompt-options');
+    options.innerHTML = '';
+
+    const appConfig = PROMPT_LIBRARY[state.currentApp];
+    const prompts = appConfig?.prompts || [];
+
+    // Determine selected label
+    let selectedLabel = 'None';
+    if (state.toggledPrompts.size > 0) {
+      const selectedId = Array.from(state.toggledPrompts)[0];
+      const selectedPrompt = prompts.find(p => p.id === selectedId);
+      if (selectedPrompt) selectedLabel = selectedPrompt.label;
+    }
+    selected.textContent = selectedLabel;
 
     // Add "None" option
-    const noneOption = document.createElement('option');
-    noneOption.value = '';
-    noneOption.innerText = 'None';
-    if (state.toggledPrompts.size === 0) {
-      noneOption.selected = true;
-    }
-    selector.appendChild(noneOption);
-
-    if (prompts.length === 0) {
-      return;
-    }
+    const noneOption = document.createElement('div');
+    noneOption.className = 'at-dropdown-option' + (state.toggledPrompts.size === 0 ? ' selected' : '');
+    noneOption.dataset.value = '';
+    noneOption.textContent = 'None';
+    options.appendChild(noneOption);
 
     prompts.forEach(prompt => {
-      const option = document.createElement('option');
-      option.value = prompt.id;
-      option.innerText = prompt.label;
-      if (state.toggledPrompts.has(prompt.id)) {
-        option.selected = true;
-      }
-      selector.appendChild(option);
+      const option = document.createElement('div');
+      option.className = 'at-dropdown-option' + (state.toggledPrompts.has(prompt.id) ? ' selected' : '');
+      option.dataset.value = prompt.id;
+      option.textContent = prompt.label;
+      options.appendChild(option);
     });
   }
 
@@ -692,29 +819,52 @@
     });
   }
 
-  function renderSelectedFiles() {
+  async function renderSelectedFiles() { // EDITED
     const container = document.getElementById('at-selected-files');
+    const statsEl = document.getElementById('at-selected-stats');
     container.innerHTML = '';
 
     if (state.selectedFiles.size === 0) {
       container.innerHTML = '<div style="width: 100%; text-align: center; color: var(--at-text-dim); font-size: 10px;">No files selected</div>';
+      if (statsEl) statsEl.innerHTML = '';
       return;
     }
 
     Array.from(state.selectedFiles).sort().forEach(filePath => {
       const parts = filePath.split(/[/\\]/);
       const name = parts.pop() || filePath;
+      const isEnabled = state.enabledFiles.has(filePath); // EDITED
 
       const tag = document.createElement('div');
-      tag.className = 'at-selected-file-tag';
+      tag.className = 'at-selected-file-tag' + (isEnabled ? '' : ' disabled'); // EDITED
       tag.innerHTML = `
+        <span class="at-file-toggle-btn ${isEnabled ? 'active' : ''}" data-path="${filePath}" title="Toggle file"></span>
         <span>${name}</span>
-        <span class="at-file-remove" data-path="${filePath}">×</span>
+        <span class="at-file-remove" data-path="${filePath}" title="Remove file">×</span>
       `;
       container.appendChild(tag);
     });
-  }
 
+    // EDITED: Calculate total lines across ENABLED files only
+    if (statsEl) {
+      const enabledCount = state.enabledFiles.size;
+      const totalCount = state.selectedFiles.size;
+      statsEl.innerHTML = `(${enabledCount}/${totalCount}, counting...)`;
+
+      let totalLines = 0;
+      for (const filePath of state.enabledFiles) { // EDITED: Only count enabled
+        try {
+          const content = await getFileContent(filePath);
+          if (content) {
+            totalLines += content.split('\n').length;
+          }
+        } catch (e) {
+          // Skip files that can't be read
+        }
+      }
+      statsEl.innerHTML = `(${enabledCount}/${totalCount}, <strong>${totalLines.toLocaleString()}</strong> lines)`;
+    }
+  }
   function updateAllUI() {
     renderAppSelector();
     renderPromptSelector();
@@ -751,31 +901,74 @@
     });
 
     // App Profile Selector
-    document.getElementById('at-app-selector').addEventListener('change', (e) => {
-      console.log('🐯 AlbinoTiger: App changed to', e.target.value);
-      state.currentApp = e.target.value;
-      state.toggledPrompts.clear();
-      renderPromptSelector();
-      saveState();
+    const appDropdown = document.getElementById('at-app-dropdown');
+    const appSelected = document.getElementById('at-app-selected');
+    const appOptions = document.getElementById('at-app-options');
+
+    appSelected.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Close other dropdowns
+      document.getElementById('at-prompt-dropdown').classList.remove('open');
+      appDropdown.classList.toggle('open');
     });
 
-    // Prompt Selector (single-select with None option)
-    document.getElementById('at-prompt-selector').addEventListener('change', (e) => {
-      const selectedValue = e.target.value;
-      state.toggledPrompts.clear();
-
-      if (selectedValue) {
-        state.toggledPrompts.add(selectedValue);
+    appOptions.addEventListener('click', (e) => {
+      const option = e.target.closest('.at-dropdown-option');
+      if (option) {
+        const value = option.dataset.value;
+        console.log('🐯 AlbinoTiger: App changed to', value);
+        state.currentApp = value;
+        state.toggledPrompts.clear();
+        state.selectedFiles.clear(); // Clear files when switching apps
+        renderAppSelector();
+        renderPromptSelector();
+        renderSelectedFiles();
+        saveState();
+        appDropdown.classList.remove('open');
       }
+    });
 
-      console.log('🐯 AlbinoTiger: Selected prompt:', selectedValue || 'None');
-      saveState();
+    // Custom Dropdown: Prompt Selector
+    const promptDropdown = document.getElementById('at-prompt-dropdown');
+    const promptSelected = document.getElementById('at-prompt-selected');
+    const promptOptions = document.getElementById('at-prompt-options');
+
+    promptSelected.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Close other dropdowns
+      appDropdown.classList.remove('open');
+      promptDropdown.classList.toggle('open');
+    });
+
+    promptOptions.addEventListener('click', (e) => {
+      const option = e.target.closest('.at-dropdown-option');
+      if (option) {
+        const value = option.dataset.value;
+        state.toggledPrompts.clear();
+        if (value) {
+          state.toggledPrompts.add(value);
+        }
+        console.log('🐯 AlbinoTiger: Selected prompt:', value || 'None');
+        renderPromptSelector();
+        saveState();
+        promptDropdown.classList.remove('open');
+      }
     });
 
     // Custom Prompt
     document.getElementById('at-custom-prompt').addEventListener('input', (e) => {
       state.customPrompt = e.target.value;
       saveState();
+    });
+
+    // Enter to GO, Shift+Enter for newline
+    document.getElementById('at-custom-prompt').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        document.getElementById('at-modal').classList.remove('search-focused');
+        state.isSearchFocused = false;
+        onGoButtonClick(true);
+      }
     });
 
     // Once Mode Toggle // EDITED
@@ -787,9 +980,15 @@
     // Click outside modal to collapse search // EDITED
     document.addEventListener('click', (e) => {
       const modal = document.getElementById('at-modal');
-      if (!modal.contains(e.target) && state.isSearchFocused) {
-        state.isSearchFocused = false;
-        modal.classList.remove('search-focused');
+      if (!modal.contains(e.target)) {
+        if (state.isSearchFocused) {
+          state.isSearchFocused = false;
+          modal.classList.remove('search-focused');
+        }
+      }
+      // Close dropdowns when clicking outside them
+      if (!e.target.closest('.at-dropdown')) {
+        document.querySelectorAll('.at-dropdown.open').forEach(d => d.classList.remove('open'));
       }
     });
 
@@ -834,8 +1033,10 @@
           console.log('🐯 AlbinoTiger: File toggled', path, isChecked);
           if (isChecked) {
             state.selectedFiles.add(path);
+            state.enabledFiles.add(path); // EDITED: Enable by default when adding
           } else {
             state.selectedFiles.delete(path);
+            state.enabledFiles.delete(path); // EDITED
           }
           renderSelectedFiles();
           saveState();
@@ -851,10 +1052,26 @@
 
     // Remove selected files
     document.getElementById('at-selected-files').addEventListener('click', (e) => {
-      e.stopPropagation(); // EDITED: Prevent click-outside handler from collapsing
+      e.stopPropagation();
+
+      // EDITED: Toggle file enabled/disabled
+      if (e.target.classList.contains('at-file-toggle-btn')) {
+        const path = e.target.dataset.path;
+        if (state.enabledFiles.has(path)) {
+          state.enabledFiles.delete(path);
+        } else {
+          state.enabledFiles.add(path);
+        }
+        renderSelectedFiles();
+        saveState();
+        return;
+      }
+
+      // Remove file entirely
       if (e.target.classList.contains('at-file-remove')) {
         const path = e.target.dataset.path;
         state.selectedFiles.delete(path);
+        state.enabledFiles.delete(path); // EDITED: Also remove from enabled
         renderSelectedFiles();
         renderFileList();
         saveState();
@@ -944,11 +1161,13 @@
       if (isChecked) {
         filesInFolder.forEach(file => {
           state.selectedFiles.add(file);
+          state.enabledFiles.add(file); // EDITED: Enable by default
         });
         console.log(`🐯 AlbinoTiger: Added ${filesInFolder.length} files to selection.`);
       } else {
         filesInFolder.forEach(file => {
           state.selectedFiles.delete(file);
+          state.enabledFiles.delete(file); // EDITED
         });
         console.log(`🐯 AlbinoTiger: Removed ${filesInFolder.length} files from selection.`);
       }
@@ -1011,10 +1230,10 @@
     }
 
     // 3. Add Files (fetched fresh every time)
-    if (state.selectedFiles.size > 0) {
-      console.log('🐯 AlbinoTiger: Fetching', state.selectedFiles.size, 'files');
+    if (state.enabledFiles.size > 0) {
+      console.log('🐯 AlbinoTiger: Fetching', state.enabledFiles.size, 'enabled files');
       const fileContents = [];
-      const sortedFiles = Array.from(state.selectedFiles).sort();
+      const sortedFiles = Array.from(state.enabledFiles).sort(); // EDITED: Use enabledFiles
 
       for (const filePath of sortedFiles) {
         const content = await getFileContent(filePath);
@@ -1040,35 +1259,61 @@
     pasteTextIntoChat(combinedPrompt, autoSend); // EDITED: Pass autoSend
   }
 
+
+  // ...WITH THIS:
   function pasteTextIntoChat(text, autoSend = true) {
     console.log('🐯 AlbinoTiger: ===== ATTEMPTING TO PASTE =====');
     console.log('🐯 AlbinoTiger: Text length:', text.length);
 
+    // EDITED: Site-specific and general selectors ordered by priority
     const selectors = [
+      // ChatGPT specific
+      '#prompt-textarea',
+      'div[id="prompt-textarea"]',
+      // Claude specific
+      'div.ProseMirror[contenteditable="true"]',
+      // Gemini specific
+      'rich-textarea div[contenteditable="true"]',
+      // Perplexity
+      'textarea[placeholder*="Ask"]',
+      // General fallbacks
+      'div[contenteditable="true"][data-placeholder]',
       'div[contenteditable="true"]',
       'div.ProseMirror',
       'textarea[placeholder*="Reply"]',
       'textarea[placeholder*="Message"]',
+      'textarea[placeholder*="message"]',
       'textarea[placeholder*="Chat"]',
+      'textarea[placeholder*="Ask"]',
+      'textarea[placeholder*="Type"]',
       'textarea[data-id="root"]',
-      'textarea',
       'div[role="textbox"]',
+      'textarea',
     ];
 
     console.log('🐯 AlbinoTiger: Checking selectors...');
 
     let target = null;
     for (const selector of selectors) {
-      const elements = document.querySelectorAll(selector);
-      console.log(`🐯 AlbinoTiger: Selector "${selector}" found ${elements.length} elements`);
+      try {
+        const elements = document.querySelectorAll(selector);
+        console.log(`🐯 AlbinoTiger: Selector "${selector}" found ${elements.length} elements`);
 
-      if (elements.length > 0) {
-        target = elements[0];
-        console.log('🐯 AlbinoTiger: ✓ Found target with selector:', selector);
-        console.log('🐯 AlbinoTiger: Target element:', target);
-        console.log('🐯 AlbinoTiger: Target tagName:', target.tagName);
-        console.log('🐯 AlbinoTiger: Target contentEditable:', target.contentEditable);
-        break;
+        // EDITED: Find visible, non-disabled element
+        for (const el of elements) {
+          const rect = el.getBoundingClientRect();
+          const isVisible = rect.width > 0 && rect.height > 0;
+          const isDisabled = el.disabled || el.getAttribute('aria-disabled') === 'true';
+
+          if (isVisible && !isDisabled) {
+            target = el;
+            console.log('🐯 AlbinoTiger: ✓ Found visible target with selector:', selector);
+            break;
+          }
+        }
+        if (target) break;
+      } catch (e) {
+        console.log(`🐯 AlbinoTiger: Selector "${selector}" failed:`, e.message);
       }
     }
 
@@ -1078,136 +1323,246 @@
       return;
     }
 
-    console.log('🐯 AlbinoTiger: Focusing target...');
+    console.log('🐯 AlbinoTiger: Target tagName:', target.tagName);
+    console.log('🐯 AlbinoTiger: Target contentEditable:', target.contentEditable);
+    console.log('🐯 AlbinoTiger: Target id:', target.id);
+
+    // EDITED: Click and focus to ensure element is active
+    target.click();
     target.focus();
 
-    if (target.contentEditable === 'true' || target.classList.contains('ProseMirror')) {
-      console.log('🐯 AlbinoTiger: Target is contenteditable, setting textContent');
-      target.textContent = text;
+    // EDITED: Handle different input types
+    const isContentEditable = target.contentEditable === 'true' || target.classList.contains('ProseMirror');
+    const isTextarea = target.tagName.toLowerCase() === 'textarea';
 
-      const events = ['input', 'change', 'keyup', 'keydown'];
-      events.forEach(eventType => {
-        const event = new Event(eventType, { bubbles: true });
-        target.dispatchEvent(event);
-        console.log('🐯 AlbinoTiger: Dispatched', eventType, 'event');
+    if (isContentEditable) {
+      console.log('🐯 AlbinoTiger: Target is contenteditable');
+
+      // EDITED: Clear existing content first
+      target.innerHTML = '';
+
+      // EDITED: For ChatGPT's #prompt-textarea, use paragraph structure
+      if (target.id === 'prompt-textarea') {
+        const p = document.createElement('p');
+        p.textContent = text;
+        target.appendChild(p);
+      } else {
+        target.textContent = text;
+      }
+
+      // EDITED: Dispatch comprehensive events
+      ['focus', 'input', 'change', 'keydown', 'keyup'].forEach(eventType => {
+        target.dispatchEvent(new Event(eventType, { bubbles: true, cancelable: true }));
       });
 
-      const inputEvent = new InputEvent('input', {
+      // EDITED: InputEvent for React/contenteditable
+      target.dispatchEvent(new InputEvent('input', {
         bubbles: true,
         cancelable: true,
         inputType: 'insertText',
         data: text
-      });
-      target.dispatchEvent(inputEvent);
-      console.log('🐯 AlbinoTiger: Dispatched InputEvent');
+      }));
 
+    } else if (isTextarea) {
+      console.log('🐯 AlbinoTiger: Target is textarea');
+
+      // EDITED: Set value using native setter to bypass React
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype, 'value'
+      )?.set;
+
+      if (nativeInputValueSetter) {
+        nativeInputValueSetter.call(target, text);
+      } else {
+        target.value = text;
+      }
+
+      // EDITED: Dispatch events
+      ['focus', 'input', 'change', 'keydown', 'keyup'].forEach(eventType => {
+        target.dispatchEvent(new Event(eventType, { bubbles: true, cancelable: true }));
+      });
     } else {
-      console.log('🐯 AlbinoTiger: Target is textarea, setting value');
-      target.value = text;
-
-      const events = ['input', 'change', 'keyup', 'keydown'];
-      events.forEach(eventType => {
-        const event = new Event(eventType, { bubbles: true });
-        target.dispatchEvent(event);
-        console.log('🐯 AlbinoTiger: Dispatched', eventType, 'event');
-      });
+      // Fallback
+      console.log('🐯 AlbinoTiger: Unknown target type, trying textContent');
+      target.textContent = text;
+      target.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
     console.log('🐯 AlbinoTiger: ✓ Text pasted successfully');
-    console.log('🐯 AlbinoTiger: Current target content length:', target.textContent?.length || target.value?.length || 0);
 
     // EDITED: Auto-send if requested
     if (autoSend) {
       console.log('🐯 AlbinoTiger: Attempting to send message...');
       setTimeout(() => {
         sendMessage(target);
-      }, 100); // Small delay to ensure paste is complete
+      }, 150); // Slightly longer delay for React state updates
     }
 
     // Reset prompt if Once mode is enabled
-    if (state.onceMode && state.toggledPrompts.size > 0) {
-      state.toggledPrompts.clear();
-      renderPromptSelector();
+    if (state.onceMode) {
+      if (state.toggledPrompts.size > 0) {
+        state.toggledPrompts.clear();
+        renderPromptSelector();
+        console.log('🐯 AlbinoTiger: Once mode - prompt reset to None');
+      }
+      if (state.enabledFiles.size > 0) { // EDITED: Disable all files
+        state.enabledFiles.clear();
+        renderSelectedFiles();
+        console.log('🐯 AlbinoTiger: Once mode - all files disabled');
+      }
       saveState();
-      console.log('🐯 AlbinoTiger: Once mode - prompt reset to None');
     }
   }
 
+  // ...WITH THIS:
   function sendMessage(target) {
     console.log('🐯 AlbinoTiger: ===== ATTEMPTING TO SEND =====');
 
-    // Try to find and click a send button first
+    // EDITED: Site-specific and general send button selectors
     const sendButtonSelectors = [
-      'button[data-testid="send-button"]', // ChatGPT
-      'button[aria-label="Send"]',
+      // ChatGPT specific
+      'button[data-testid="send-button"]',
+      'button[data-testid="composer-send-button"]',
+      'form button[type="submit"]',
+      // Claude specific
       'button[aria-label="Send Message"]',
-      'button[type="submit"]',
-      'button:has(svg[data-icon="send"])',
-      'button:has(svg[data-icon="arrow-up"])',
-      'div[aria-label="Send Message"]',
+      'button[aria-label="Send message"]',
+      // Gemini specific
+      'button[aria-label="Send message"]',
       'button.send-button',
+      // Perplexity
+      'button[aria-label="Submit"]',
+      // Poe
+      'button[class*="SendButton"]',
+      // General
+      'button[aria-label="Send"]',
+      'button[aria-label="send"]',
+      'button[type="submit"]',
+      'button[class*="send"]',
+      'button[class*="Send"]',
+      // SVG icon buttons (arrow up typically means send)
+      'button svg[class*="icon"]',
     ];
 
+    // EDITED: Try multiple approaches to find send button
     for (const selector of sendButtonSelectors) {
       try {
-        const sendBtn = document.querySelector(selector);
-        if (sendBtn && !sendBtn.disabled) {
-          console.log('🐯 AlbinoTiger: Found send button with selector:', selector);
-          sendBtn.click();
-          console.log('🐯 AlbinoTiger: ✓ Clicked send button');
-          return;
+        const elements = document.querySelectorAll(selector);
+        for (const el of elements) {
+          // Get the actual button (might be the element or its parent)
+          const btn = el.tagName === 'BUTTON' ? el : el.closest('button');
+          if (btn && !btn.disabled && btn.offsetParent !== null) {
+            const rect = btn.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+              console.log('🐯 AlbinoTiger: Found send button with selector:', selector);
+              btn.click();
+              console.log('🐯 AlbinoTiger: ✓ Clicked send button');
+              return;
+            }
+          }
         }
       } catch (e) {
-        // :has() might not be supported, continue
+        // Continue to next selector
       }
     }
 
-    // Fallback: simulate Enter key
+    // EDITED: Try finding button near the input
+    const inputContainer = target.closest('form') || target.parentElement?.parentElement?.parentElement;
+    if (inputContainer) {
+      const nearbyButtons = inputContainer.querySelectorAll('button');
+      for (const btn of nearbyButtons) {
+        if (!btn.disabled && btn.offsetParent !== null) {
+          const rect = btn.getBoundingClientRect();
+          // Look for small-ish buttons (likely send buttons, not large action buttons)
+          if (rect.width > 0 && rect.width < 100 && rect.height > 0) {
+            console.log('🐯 AlbinoTiger: Found nearby button, attempting click');
+            btn.click();
+            console.log('🐯 AlbinoTiger: ✓ Clicked nearby button');
+            return;
+          }
+        }
+      }
+    }
+
+    // EDITED: Fallback - simulate Enter key with better event construction
     console.log('🐯 AlbinoTiger: No send button found, simulating Enter key');
-    const enterEvent = new KeyboardEvent('keydown', {
+
+    const enterDown = new KeyboardEvent('keydown', {
       key: 'Enter',
       code: 'Enter',
       keyCode: 13,
       which: 13,
       bubbles: true,
       cancelable: true,
+      composed: true,
     });
-    target.dispatchEvent(enterEvent);
 
-    // Also try keyup
-    const enterUpEvent = new KeyboardEvent('keyup', {
+    const enterPress = new KeyboardEvent('keypress', {
       key: 'Enter',
       code: 'Enter',
       keyCode: 13,
       which: 13,
       bubbles: true,
+      cancelable: true,
+      composed: true,
     });
-    target.dispatchEvent(enterUpEvent);
 
-    console.log('🐯 AlbinoTiger: ✓ Enter key simulated');
+    const enterUp = new KeyboardEvent('keyup', {
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 13,
+      which: 13,
+      bubbles: true,
+      composed: true,
+    });
+
+    target.dispatchEvent(enterDown);
+    target.dispatchEvent(enterPress);
+    target.dispatchEvent(enterUp);
+
+    console.log('🐯 AlbinoTiger: ✓ Enter key events dispatched');
   }
 
+
+  // ...WITH THIS:
   // EDITED: Clear the chat input box
   function clearChatInput() {
     console.log('🐯 AlbinoTiger: ===== CLEARING CHAT INPUT =====');
 
+    // EDITED: Use same selectors as paste function
     const selectors = [
+      '#prompt-textarea',
+      'div[id="prompt-textarea"]',
+      'div.ProseMirror[contenteditable="true"]',
+      'rich-textarea div[contenteditable="true"]',
+      'textarea[placeholder*="Ask"]',
+      'div[contenteditable="true"][data-placeholder]',
       'div[contenteditable="true"]',
       'div.ProseMirror',
       'textarea[placeholder*="Reply"]',
       'textarea[placeholder*="Message"]',
+      'textarea[placeholder*="message"]',
       'textarea[placeholder*="Chat"]',
+      'textarea[placeholder*="Type"]',
       'textarea[data-id="root"]',
-      'textarea',
       'div[role="textbox"]',
+      'textarea',
     ];
 
     let target = null;
     for (const selector of selectors) {
-      const elements = document.querySelectorAll(selector);
-      if (elements.length > 0) {
-        target = elements[0];
-        break;
+      try {
+        const elements = document.querySelectorAll(selector);
+        for (const el of elements) {
+          const rect = el.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            target = el;
+            break;
+          }
+        }
+        if (target) break;
+      } catch (e) {
+        continue;
       }
     }
 
@@ -1216,18 +1571,33 @@
       return;
     }
 
+    target.click();
     target.focus();
 
-    if (target.contentEditable === 'true' || target.classList.contains('ProseMirror')) {
-      target.textContent = '';
-      // Clear any paragraph elements inside
+    const isContentEditable = target.contentEditable === 'true' || target.classList.contains('ProseMirror');
+    const isTextarea = target.tagName.toLowerCase() === 'textarea';
+
+    if (isContentEditable) {
       target.innerHTML = '';
+      // EDITED: For ChatGPT, restore empty paragraph
+      if (target.id === 'prompt-textarea') {
+        target.innerHTML = '<p><br></p>';
+      }
+    } else if (isTextarea) {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype, 'value'
+      )?.set;
+      if (nativeInputValueSetter) {
+        nativeInputValueSetter.call(target, '');
+      } else {
+        target.value = '';
+      }
     } else {
-      target.value = '';
+      target.textContent = '';
     }
 
     // Dispatch events to notify the site
-    ['input', 'change'].forEach(eventType => {
+    ['focus', 'input', 'change'].forEach(eventType => {
       target.dispatchEvent(new Event(eventType, { bubbles: true }));
     });
 

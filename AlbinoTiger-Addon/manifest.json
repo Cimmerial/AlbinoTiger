@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AlbinoTiger",
-  "version": "0.6.0",
+  "version": "1.0.0",
   "description": "Helps build and paste complex prompts for GenAI sites.",
   "permissions": [
     "storage"
@@ -14,8 +14,17 @@
       "resources": ["prompts/*.md"],
       "matches": [
         "https://*.openai.com/*",
+        "https://chatgpt.com/*",
         "https://*.claude.ai/*",
-        "https://*.gemini.google.com/*"
+        "https://*.gemini.google.com/*",
+        "https://*.perplexity.ai/*",
+        "https://*.poe.com/*",
+        "https://*.you.com/*",
+        "https://*.phind.com/*",
+        "https://*.mistral.ai/*",
+        "https://*.deepseek.com/*",
+        "https://*.groq.com/*",
+        "https://*.huggingface.co/*"
       ]
     }
   ],
@@ -23,8 +32,17 @@
     {
       "matches": [
         "https://*.openai.com/*",
+        "https://chatgpt.com/*",
         "https://*.claude.ai/*",
-        "https://*.gemini.google.com/*"
+        "https://*.gemini.google.com/*",
+        "https://*.perplexity.ai/*",
+        "https://*.poe.com/*",
+        "https://*.you.com/*",
+        "https://*.phind.com/*",
+        "https://*.mistral.ai/*",
+        "https://*.deepseek.com/*",
+        "https://*.groq.com/*",
+        "https://*.huggingface.co/*"
       ],
       "js": [
         "content.js"
