@@ -1,0 +1,14 @@
+{
+    "name": "albinotiger-server",
+    "version": "0.1.0",
+    "description": "Local server for AlbinoTiger addon to access file system.",
+    "main": "server.js",
+    "scripts": {
+      "start": "node server.js"
+    },
+    "dependencies": {
+      "cors": "^2.8.5",
+      "express": "^4.19.2",
+      "fast-glob": "^3.3.2"
+    }
+  }

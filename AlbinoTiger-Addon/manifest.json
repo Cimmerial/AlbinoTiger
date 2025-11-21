@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "AlbinoTiger",
+  "version": "0.1.0",
+  "description": "Helps build and paste complex prompts for GenAI sites.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "http://localhost:12345/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.openai.com/*",
+        "https://*.claude.ai/*",
+        "https://*.gemini.google.com/*"
+      ],
+      "js": [
+        "content.js"
+      ]
+    }
+  ]
+}
