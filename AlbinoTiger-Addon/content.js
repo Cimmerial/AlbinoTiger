@@ -23,17 +23,18 @@
     // cyanotype
   };
 
-  // Load state from localStorage
   let state = {
     currentApp: 'AlbinoTiger',
     customPrompt: '',
     toggledPrompts: new Set(),
     foundFiles: [],
     selectedFiles: new Set(),
-    enabledFiles: new Set(), // EDITED: Track which selected files are enabled for pasting
+    enabledFiles: new Set(),
+    savedEnabledFiles: new Set(), // EDITED: Remember enabled files when server goes offline
     isModalVisible: true,
     isSearchFocused: false,
     onceMode: false,
+    serverOnline: false,
   };
   // Cache for loaded prompts to avoid re-fetching
   // Cache for loaded prompts (cleared on each page load to pick up changes)
@@ -50,6 +51,78 @@
       clearTimeout(timeout);
       timeout = setTimeout(later, wait);
     };
+  }
+
+  async function checkServerStatus() {
+    try {
+      const response = await fetch('http://localhost:12345/directory', {
+        method: 'GET',
+        signal: AbortSignal.timeout(2000) // 2 second timeout
+      });
+      const wasOnline = state.serverOnline;
+      state.serverOnline = response.ok;
+      if (state.serverOnline !== wasOnline) {
+        console.log(`🐯 AlbinoTiger: Server ${state.serverOnline ? 'online' : 'offline'}`);
+        updateFileSearchState();
+      }
+      return state.serverOnline;
+    } catch (err) {
+      const wasOnline = state.serverOnline;
+      state.serverOnline = false;
+      if (wasOnline) {
+        console.log('🐯 AlbinoTiger: Server offline');
+        updateFileSearchState();
+      }
+      return false;
+    }
+  }
+
+  function updateFileSearchState() {
+    const searchInput = document.getElementById('at-file-search-input');
+    const fileList = document.getElementById('at-file-list');
+    const serverStatus = document.getElementById('at-server-status');
+
+    if (!searchInput || !fileList) return;
+
+    if (state.serverOnline) {
+      searchInput.disabled = false;
+      searchInput.placeholder = 'Search files & folders...';
+      searchInput.style.opacity = '1';
+      searchInput.style.cursor = 'text';
+      if (serverStatus) serverStatus.textContent = '';
+      if (!searchInput.value) {
+        fileList.innerHTML = '<div style="padding: 8px; color: var(--at-text-dim); text-align: center; font-size: 10px;">Start typing to search...</div>';
+      }
+
+      // EDITED: Restore previously enabled files when server comes back
+      if (state.savedEnabledFiles.size > 0) {
+        state.savedEnabledFiles.forEach(f => {
+          if (state.selectedFiles.has(f)) {
+            state.enabledFiles.add(f);
+          }
+        });
+        state.savedEnabledFiles.clear();
+        saveState();
+        renderSelectedFiles();
+      }
+    } else {
+      searchInput.disabled = true;
+      searchInput.placeholder = '';
+      searchInput.style.opacity = '0.5';
+      searchInput.style.cursor = 'not-allowed';
+      searchInput.value = '';
+      state.foundFiles = [];
+      if (serverStatus) serverStatus.textContent = '(server offline)';
+      fileList.innerHTML = '<div style="padding: 8px; color: var(--at-text-dim); text-align: center; font-size: 10px;">Start server on port 12345</div>';
+
+      // EDITED: Save enabled files before clearing, then deselect all
+      if (state.enabledFiles.size > 0) {
+        state.savedEnabledFiles = new Set(state.enabledFiles);
+        state.enabledFiles.clear();
+        saveState();
+        renderSelectedFiles();
+      }
+    }
   }
 
   // Fuzzy search helper with better matching
@@ -87,7 +160,8 @@
         state.customPrompt = parsed.customPrompt || '';
         state.toggledPrompts = new Set(parsed.toggledPrompts || []);
         state.selectedFiles = new Set(parsed.selectedFiles || []);
-        state.enabledFiles = new Set(parsed.enabledFiles || parsed.selectedFiles || []); // EDITED: Default to all enabled
+        state.enabledFiles = new Set(parsed.enabledFiles || parsed.selectedFiles || []);
+        state.savedEnabledFiles = new Set(parsed.savedEnabledFiles || []); // EDITED
         state.isModalVisible = parsed.isModalVisible !== undefined ? parsed.isModalVisible : true;
         state.onceMode = parsed.onceMode || false;
         console.log('🐯 AlbinoTiger: State loaded from localStorage', state);
@@ -105,7 +179,8 @@
         customPrompt: state.customPrompt,
         toggledPrompts: Array.from(state.toggledPrompts),
         selectedFiles: Array.from(state.selectedFiles),
-        enabledFiles: Array.from(state.enabledFiles), // EDITED
+        enabledFiles: Array.from(state.enabledFiles),
+        savedEnabledFiles: Array.from(state.savedEnabledFiles), // EDITED
         isModalVisible: state.isModalVisible,
         onceMode: state.onceMode,
       }));
@@ -165,9 +240,9 @@
   position: fixed;
   bottom: 16px;
   right: 16px;
-  width: 300px;
-  max-height: 552px; 
-        background: var(--at-bg);
+  width: 350px;
+  max-height: 552px;
+         background: var(--at-bg);
         border: 2px solid var(--at-border);
         border-radius: 12px;
         box-shadow: var(--at-shadow);
@@ -177,8 +252,9 @@
         z-index: 999999;
         display: flex;
         flex-direction: column;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease; /* EDITED */
         user-select: none;
+        overflow: hidden; /* EDITED: Ensures content clips during transition */
       }
       
       #at-custom-prompt {
@@ -186,25 +262,33 @@
       }
       
       #at-modal.search-focused { /* EDITED */
-      width: 500px;
+      width: 550px;
       max-height: 690px; /* EDITED: 600 * 1.15 = 690 */
     }
       
-      #at-modal[data-visible="false"] {
-        width: auto;
-        height: auto;
-        max-height: none;
-      }
-      
-      #at-modal[data-visible="false"] #at-body,
-      #at-modal[data-visible="false"] #at-footer {
-        display: none;
-      }
-      
-      #at-modal[data-visible="false"] #at-header {
-        border-bottom: none;
-        border-radius: 10px;
-      }
+    #at-modal[data-visible="false"] { /* EDITED */
+    width: 185px; /* EDITED: Fixed width for smooth transition */
+    max-height: 40px; /* EDITED: Just header height */
+  }
+         
+         #at-modal[data-visible="false"] #at-body,
+  #at-modal[data-visible="false"] #at-footer {
+    opacity: 0; /* EDITED: Fade out instead of display:none */
+    visibility: hidden; /* EDITED */
+    max-height: 0; /* EDITED */
+    padding: 0; /* EDITED */
+    overflow: hidden; /* EDITED */
+    transition: opacity 0.2s ease, max-height 0.2s ease, padding 0.2s ease; /* EDITED */
+  }
+  
+  #at-body, #at-footer { /* EDITED: Add transition for expanding */
+    transition: opacity 0.3s ease 0.1s, max-height 0.3s ease, padding 0.3s ease; /* EDITED */
+  }
+         
+         #at-modal[data-visible="false"] #at-header {
+    border-bottom: none;
+    border-radius: 10px;
+  }
 
       #at-header { /* EDITED */
       display: flex;
@@ -442,6 +526,12 @@
         transition: all 0.2s;
       }
       
+      #at-file-search-input:disabled { /* EDITED */
+        background: var(--at-bg);
+        border-color: #52525b;
+        color: var(--at-text-dim);
+      }
+      
       #at-file-search-input:focus {
         outline: none;
         border-color: var(--at-primary);
@@ -542,20 +632,25 @@
       }
 
       .at-file-toggle-btn { /* EDITED: Toggle bubble */
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        border: 2px solid #71717a;
-        background: transparent;
-        cursor: pointer;
-        transition: all 0.2s;
-        flex-shrink: 0;
-      }
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #71717a;
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
 
-      .at-file-toggle-btn.active { /* EDITED */
-        background: var(--at-primary);
-        border-color: var(--at-primary);
-      }
+    .at-file-toggle-btn.active { /* EDITED */
+      background: var(--at-primary);
+      border-color: var(--at-primary);
+    }
+
+    .at-file-toggle-btn.offline { /* EDITED: Disabled state when server offline */
+      cursor: not-allowed;
+      opacity: 0.4;
+    }
 
       .at-file-remove {
         cursor: pointer;
@@ -706,8 +801,8 @@
           </div>
           
           <div class="at-section">
-            <label for="at-file-search-input" class="at-section-title">Project Files</label>
-            <input type="text" id="at-file-search-input" placeholder="Search files & folders...">
+          <label for="at-file-search-input" class="at-section-title">Project Files <span id="at-server-status" style="font-weight: 400; color: #ef4444;"></span></label>
+          <input type="text" id="at-file-search-input" placeholder="Search files & folders...">
             <div id="at-file-list">
               <div style="padding: 8px; color: var(--at-text-dim); text-align: center; font-size: 10px;">Start typing to search...</div>
             </div>
@@ -833,12 +928,13 @@
     Array.from(state.selectedFiles).sort().forEach(filePath => {
       const parts = filePath.split(/[/\\]/);
       const name = parts.pop() || filePath;
-      const isEnabled = state.enabledFiles.has(filePath); // EDITED
+      const isEnabled = state.enabledFiles.has(filePath);
+      const isOffline = !state.serverOnline; // EDITED
 
       const tag = document.createElement('div');
-      tag.className = 'at-selected-file-tag' + (isEnabled ? '' : ' disabled'); // EDITED
+      tag.className = 'at-selected-file-tag' + (isEnabled ? '' : ' disabled');
       tag.innerHTML = `
-        <span class="at-file-toggle-btn ${isEnabled ? 'active' : ''}" data-path="${filePath}" title="Toggle file"></span>
+        <span class="at-file-toggle-btn ${isEnabled ? 'active' : ''} ${isOffline ? 'offline' : ''}" data-path="${filePath}" title="${isOffline ? 'Server offline' : 'Toggle file'}"></span>
         <span>${name}</span>
         <span class="at-file-remove" data-path="${filePath}" title="Remove file">×</span>
       `;
@@ -870,11 +966,12 @@
     renderPromptSelector();
     renderFileList();
     renderSelectedFiles();
+    updateFileSearchState(); // EDITED: Apply server status to UI
 
     document.getElementById('at-custom-prompt').value = state.customPrompt;
     document.getElementById('at-modal').dataset.visible = state.isModalVisible;
     document.getElementById('at-toggle-modal').textContent = state.isModalVisible ? '−' : '+';
-    document.getElementById('at-once-checkbox').checked = state.onceMode; // EDITED
+    document.getElementById('at-once-checkbox').checked = state.onceMode;
   }
 
   // 4. --- EVENT LISTENERS ---
@@ -1054,8 +1151,12 @@
     document.getElementById('at-selected-files').addEventListener('click', (e) => {
       e.stopPropagation();
 
-      // EDITED: Toggle file enabled/disabled
+      // EDITED: Toggle file enabled/disabled (only if server online)
       if (e.target.classList.contains('at-file-toggle-btn')) {
+        if (!state.serverOnline) {
+          console.log('🐯 AlbinoTiger: Cannot toggle files while server offline');
+          return; // EDITED: Block toggling when offline
+        }
         const path = e.target.dataset.path;
         if (state.enabledFiles.has(path)) {
           state.enabledFiles.delete(path);
@@ -1067,11 +1168,11 @@
         return;
       }
 
-      // Remove file entirely
+      // Remove file entirely (always allowed)
       if (e.target.classList.contains('at-file-remove')) {
         const path = e.target.dataset.path;
         state.selectedFiles.delete(path);
-        state.enabledFiles.delete(path); // EDITED: Also remove from enabled
+        state.enabledFiles.delete(path);
         renderSelectedFiles();
         renderFileList();
         saveState();
@@ -1103,11 +1204,17 @@
   // 5. --- CORE LOGIC ---
 
   async function searchFiles(query) {
+    // EDITED: Don't search if server is offline
+    if (!state.serverOnline) {
+      console.log('🐯 AlbinoTiger: Server offline, skipping search');
+      return;
+    }
+
     try {
       console.log('🐯 AlbinoTiger: Searching for files with query:', query);
-      const appConfig = PROMPT_LIBRARY[state.currentApp]; // EDITED
-      const rootDir = appConfig?.rootDir || ''; // EDITED
-      const url = `http://localhost:12345/search?q=${encodeURIComponent(query)}&root=${encodeURIComponent(rootDir)}`; // EDITED
+      const appConfig = PROMPT_LIBRARY[state.currentApp];
+      const rootDir = appConfig?.rootDir || '';
+      const url = `http://localhost:12345/search?q=${encodeURIComponent(query)}&root=${encodeURIComponent(rootDir)}`;
 
       const response = await fetch(url);
 
@@ -1139,7 +1246,8 @@
       renderFileList();
     } catch (err) {
       console.error('🐯 AlbinoTiger: Error searching files:', err);
-      alert('AlbinoTiger Error: Could not connect to local server. Make sure it\'s running on port 12345.');
+      state.serverOnline = false; // EDITED: Mark server as offline
+      updateFileSearchState(); // EDITED: Update UI
       state.foundFiles = [];
       renderFileList();
     }
@@ -1612,6 +1720,11 @@
     injectUI();
     updateAllUI();
     addListeners();
+
+    // EDITED: Check server status on load and periodically
+    checkServerStatus();
+    setInterval(checkServerStatus, 5000); // Check every 5 seconds
+
     console.log('🐯 AlbinoTiger: ✓ Initialization complete');
   }
 
