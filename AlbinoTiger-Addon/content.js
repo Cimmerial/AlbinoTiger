@@ -17,7 +17,13 @@
         { id: 'dev_quick', label: 'Quick', file: 'at-dev-quick.md' },
       ],
     },
-    // general (writing in my voice, code question, explaination of school related topic)
+    'General': {
+      rootDir: 'AlbinoTiger', // EDITED: Per-app root directory
+      prompts: [
+        { id: 'general_learning', label: 'Learning', file: 'general-learning.md' },
+    // general (writing in my voice, code question,)
+      ],
+    },
     // retro-royale
     // juician
     // cyanotype
@@ -563,15 +569,14 @@
         gap: 6px;
         padding: 5px 7px;
         border-radius: 4px;
-        cursor: pointer;
         font-size: 11px;
         transition: all 0.2s;
-        overflow: hidden; 
+        overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .at-file-item:hover {  
-        background: var(--at-bg-light);
+      .at-file-item:hover {
+          background: var(--at-bg-light);
       }
       .at-file-item input {
         cursor: pointer;
@@ -581,14 +586,41 @@
       .at-file-item strong {
         color: var(--at-text);
         flex-shrink: 0;
+        cursor: pointer; /* EDITED */
       }
-      .at-file-item-path {  
-        color: var(--at-text-dim);
-        margin-left: auto;
+      .at-file-item-path {
+          color: var(--at-text-dim);
         font-size: 9px;
         flex-shrink: 1;
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+
+      .at-file-item-controls { /* EDITED */
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: auto;
+      }
+
+      .at-file-select-off { /* EDITED: Circle for select+disabled */
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid #71717a;
+        background: transparent;
+        cursor: pointer;
+        transition: all 0.2s;
+        flex-shrink: 0;
+      }
+
+      .at-file-select-off:hover {
+        border-color: var(--at-text-dim);
+      }
+
+      .at-file-select-off.active { /* EDITED: When file is selected but disabled */
+        background: #52525b;
+        border-color: #52525b;
       }
       
       #at-selected-files {
@@ -894,7 +926,8 @@
     state.foundFiles.forEach(filePath => {
       const isDirectory = filePath.endsWith('/');
       const cleanPath = isDirectory ? filePath.slice(0, -1) : filePath;
-      const isChecked = state.selectedFiles.has(cleanPath);
+      const isSelected = state.selectedFiles.has(cleanPath);
+      const isEnabled = state.enabledFiles.has(cleanPath);
 
       const parts = cleanPath.split(/[/\\]/);
       const name = parts.pop() || cleanPath;
@@ -905,10 +938,14 @@
       item.dataset.path = cleanPath;
       item.dataset.type = isDirectory ? 'folder' : 'file';
 
+      // EDITED: Checkbox = selected+enabled, Circle = selected+disabled
       item.innerHTML = `
-        <input type="checkbox" class="at-file-toggle" data-path="${cleanPath}" ${isChecked ? 'checked' : ''}>
+        <input type="checkbox" class="at-file-toggle-on" data-path="${cleanPath}" ${isSelected && isEnabled ? 'checked' : ''} title="Select & enable">
         <strong>${isDirectory ? '📁' : '📄'} ${name}</strong>
-        <span class="at-file-item-path">${dirPath}</span>
+        <div class="at-file-item-controls">
+          <span class="at-file-item-path">${dirPath}</span>
+          <span class="at-file-select-off ${isSelected && !isEnabled ? 'active' : ''}" data-path="${cleanPath}" data-type="${isDirectory ? 'folder' : 'file'}" title="Select & disable"></span>
+        </div>
       `;
       container.appendChild(item);
     });
@@ -1115,32 +1152,82 @@
     // File Selection
     document.getElementById('at-file-list').addEventListener('click', async (e) => {
       const item = e.target.closest('.at-file-item');
-      if (item) {
-        const path = item.dataset.path;
-        const type = item.dataset.type;
-        const checkbox = item.querySelector('.at-file-toggle');
+      if (!item) return;
 
-        if (e.target !== checkbox) {
-          checkbox.checked = !checkbox.checked;
-        }
+      const path = item.dataset.path;
+      const type = item.dataset.type;
+      const checkboxOn = item.querySelector('.at-file-toggle-on');
+      const circleOff = item.querySelector('.at-file-select-off');
 
-        const isChecked = checkbox.checked;
-
+      // EDITED: Handle checkbox click (select + enable)
+      if (e.target.classList.contains('at-file-toggle-on')) {
+        const isChecked = checkboxOn.checked;
+        
         if (type === 'file') {
-          console.log('🐯 AlbinoTiger: File toggled', path, isChecked);
           if (isChecked) {
             state.selectedFiles.add(path);
-            state.enabledFiles.add(path); // EDITED: Enable by default when adding
+            state.enabledFiles.add(path);
           } else {
             state.selectedFiles.delete(path);
-            state.enabledFiles.delete(path); // EDITED
+            state.enabledFiles.delete(path);
           }
+          renderFileList();
           renderSelectedFiles();
           saveState();
-
         } else if (type === 'folder') {
-          console.log('🐯 AlbinoTiger: Folder toggled', path, isChecked);
-          await handleFolderToggle(path, isChecked);
+          await handleFolderToggle(path, isChecked, true); // true = enable
+          renderFileList();
+          renderSelectedFiles();
+        }
+        return;
+      }
+
+      // EDITED: Handle circle click (select + disable, or toggle enabled state)
+      if (e.target.classList.contains('at-file-select-off')) {
+        const targetPath = e.target.dataset.path;
+        const targetType = e.target.dataset.type;
+
+        if (targetType === 'file') {
+          if (!state.selectedFiles.has(targetPath)) {
+            // Not selected: select but disable
+            state.selectedFiles.add(targetPath);
+            state.enabledFiles.delete(targetPath);
+          } else if (state.enabledFiles.has(targetPath)) {
+            // Selected+enabled: switch to disabled
+            state.enabledFiles.delete(targetPath);
+          } else {
+            // Selected+disabled: deselect entirely
+            state.selectedFiles.delete(targetPath);
+          }
+          renderFileList();
+          renderSelectedFiles();
+          saveState();
+        } else if (targetType === 'folder') {
+          await handleFolderToggle(targetPath, true, false); // false = disable
+          renderFileList();
+          renderSelectedFiles();
+        }
+        return;
+      }
+
+      // EDITED: Clicking on file name/icon toggles checkbox behavior
+      if (e.target.tagName === 'STRONG' || e.target.closest('strong')) {
+        checkboxOn.checked = !checkboxOn.checked;
+        const isChecked = checkboxOn.checked;
+        
+        if (type === 'file') {
+          if (isChecked) {
+            state.selectedFiles.add(path);
+            state.enabledFiles.add(path);
+          } else {
+            state.selectedFiles.delete(path);
+            state.enabledFiles.delete(path);
+          }
+          renderFileList();
+          renderSelectedFiles();
+          saveState();
+        } else if (type === 'folder') {
+          await handleFolderToggle(path, isChecked, true);
           renderFileList();
           renderSelectedFiles();
         }
@@ -1253,7 +1340,7 @@
     }
   }
 
-  async function handleFolderToggle(folderPath, isChecked) {
+  async function handleFolderToggle(folderPath, isChecked, enableFiles = true) { // EDITED: Added enableFiles param
     try {
       console.log(`🐯 AlbinoTiger: Fetching contents for folder: ${folderPath}`);
       const url = `http://localhost:12345/folder-contents?path=${encodeURIComponent(folderPath)}`;
@@ -1269,13 +1356,17 @@
       if (isChecked) {
         filesInFolder.forEach(file => {
           state.selectedFiles.add(file);
-          state.enabledFiles.add(file); // EDITED: Enable by default
+          if (enableFiles) {
+            state.enabledFiles.add(file);
+          } else {
+            state.enabledFiles.delete(file); // EDITED: Select but keep disabled
+          }
         });
-        console.log(`🐯 AlbinoTiger: Added ${filesInFolder.length} files to selection.`);
+        console.log(`🐯 AlbinoTiger: Added ${filesInFolder.length} files (enabled: ${enableFiles}).`);
       } else {
         filesInFolder.forEach(file => {
           state.selectedFiles.delete(file);
-          state.enabledFiles.delete(file); // EDITED
+          state.enabledFiles.delete(file);
         });
         console.log(`🐯 AlbinoTiger: Removed ${filesInFolder.length} files from selection.`);
       }
