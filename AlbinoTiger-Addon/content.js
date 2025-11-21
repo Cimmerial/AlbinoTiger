@@ -31,8 +31,8 @@
     onceMode: false, // EDITED: Reset prompt after GO
   };
   // Cache for loaded prompts to avoid re-fetching
- // Cache for loaded prompts (cleared on each page load to pick up changes)
- const promptCache = new Map();
+  // Cache for loaded prompts (cleared on each page load to pick up changes)
+  const promptCache = new Map();
 
   // Debounce utility
   function debounce(func, wait) {
@@ -189,37 +189,52 @@
       #at-modal[data-visible="false"] #at-footer {
         display: none;
       }
+      
+      #at-modal[data-visible="false"] #at-header {
+        border-bottom: none;
+        border-radius: 10px;
+      }
 
       #at-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 10px 14px;
+        padding: 8px 12px;
         border-bottom: 2px solid var(--at-border);
         background: linear-gradient(135deg, var(--at-primary) 0%, var(--at-primary-dark) 100%);
         border-radius: 10px 10px 0 0;
         cursor: pointer;
         user-select: none;
+        min-height: 20px;
       }
       
       #at-header h3 {
         margin: 0;
-        font-size: 14px;
+        margin-right: 8px;
+        font-size: 13px;
         font-weight: 700;
         color: white;
         letter-spacing: 0.5px;
+        line-height: 1;
       }
       
       #at-toggle-modal {
         cursor: pointer;
         font-weight: bold;
-        padding: 4px 8px;
-        border-radius: 5px;
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
         background: rgba(255, 255, 255, 0.2);
         color: white;
         font-size: 14px;
         transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+        flex-shrink: 0;
       }
+      
       #at-toggle-modal:hover {  
         background: rgba(255, 255, 255, 0.3);
         transform: scale(1.1);
@@ -449,26 +464,62 @@
         border-radius: 0 0 10px 10px;
       }
       
-      #at-go-button {
-        width: 100%;
+      .at-button-row { /* EDITED */
+        display: flex;
+        gap: 6px;
+      }
+      
+      .at-btn {
         padding: 10px;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 700;
         color: white;
-        background: linear-gradient(135deg, var(--at-primary) 0%, var(--at-primary-dark) 100%);
         border: none;
         border-radius: 6px;
         cursor: pointer;
         transition: all 0.2s;
-        letter-spacing: 0.5px;
         text-transform: uppercase;
       }
-      #at-go-button:hover {  
+      
+      .at-btn:hover {
         transform: translateY(-2px);
+      }
+      
+      .at-btn:active {
+        transform: translateY(0);
+      }
+      
+      #at-go-button {
+        flex: 2;
+        background: linear-gradient(135deg, var(--at-primary) 0%, var(--at-primary-dark) 100%);
+      }
+      
+      #at-go-button:hover {
         box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
       }
-      #at-go-button:active {
-        transform: translateY(0);
+      
+      #at-slow-button {
+        flex: 1;
+        background: var(--at-bg-light);
+        font-size: 10px;
+      }
+      
+      #at-slow-button:hover {
+        background: var(--at-border);
+      }
+      
+      #at-clear-button {
+        width: 38px;
+        background: #dc2626;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 0;
+      }
+      
+      #at-clear-button:hover {
+        background: #ef4444;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
       }
       
       /* Scrollbar styling */
@@ -505,11 +556,10 @@
     // Inject HTML
     const modalHTML = `
       <div id="at-modal" data-visible="true">
-        <div id="at-header">
-          <h3>🐯 ALBINO TIGER</h3>
-          <div id="at-toggle-modal" title="Toggle Modal">−</div>
-        </div>
-        
+      <div id="at-header">
+      <h3 style="display: flex; align-items: center; gap: 6px;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5c.67 0 1.35.09 2 .26 1.78-2 5.03-2.84 6.42-2.26 1.4.58-.42 7-.42 7 .57 1.07 1 2.24 1 3.44C21 17.9 16.97 21 12 21s-9-3-9-7.56c0-1.25.5-2.4 1-3.44 0 0-1.89-6.42-.5-7 1.39-.58 4.72.23 6.5 2.23A9.04 9.04 0 0 1 12 5Z"/><path d="M8 14v.5"/><path d="M16 14v.5"/><path d="M11.25 16.25h1.5L12 17l-.75-.75Z"/></svg>ALB1NO T1GER</h3>
+      <div id="at-toggle-modal" title="Toggle Modal">−</div>
+    </div>
         <div id="at-body">
         <div class="at-compact-row">
         <div class="at-section">
@@ -550,7 +600,11 @@
         </div>
         
         <div id="at-footer">
-          <button id="at-go-button">GO</button>
+          <div class="at-button-row">
+            <button id="at-go-button" class="at-btn">GO</button>
+            <button id="at-slow-button" class="at-btn">SLOW</button>
+            <button id="at-clear-button" class="at-btn"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>
+          </div>
         </div>
       </div>
     `;
@@ -810,7 +864,20 @@
     // GO Button
     document.getElementById('at-go-button').addEventListener('click', () => {
       document.getElementById('at-modal').classList.remove('search-focused');
-      onGoButtonClick();
+      state.isSearchFocused = false;
+      onGoButtonClick(true); // true = auto-send
+    });
+
+    // SLOW Button - paste only // EDITED
+    document.getElementById('at-slow-button').addEventListener('click', () => {
+      document.getElementById('at-modal').classList.remove('search-focused');
+      state.isSearchFocused = false;
+      onGoButtonClick(false); // false = paste only
+    });
+
+    // Clear Button - clear the AI input box // EDITED
+    document.getElementById('at-clear-button').addEventListener('click', () => {
+      clearChatInput();
     });
 
     console.log('🐯 AlbinoTiger: Event listeners added');
@@ -915,21 +982,22 @@
     }
   }
 
-  async function onGoButtonClick() {
+  async function onGoButtonClick(autoSend = true) { // EDITED: Added autoSend param
     console.log('🐯 AlbinoTiger: ===== GO BUTTON CLICKED =====');
-    
-    // Collapse search on GO // EDITED
+    console.log('🐯 AlbinoTiger: Auto-send:', autoSend);
+
+    // Collapse search on GO
     state.isSearchFocused = false;
     document.getElementById('at-modal').classList.remove('search-focused');
-    
+
     const finalPrompt = [];
-    
+
     // 1. Add Custom Prompt
     if (state.customPrompt.trim()) {
       console.log('🐯 AlbinoTiger: Adding custom prompt');
       finalPrompt.push(state.customPrompt.trim());
     }
-    
+
     // 2. Add Predefined Prompts // EDITED: Updated for new structure
     const appConfig = PROMPT_LIBRARY[state.currentApp];
     const currentAppPrompts = appConfig?.prompts || [];
@@ -969,10 +1037,10 @@
     console.log('🐯 AlbinoTiger: Final prompt created, length:', combinedPrompt.length);
     console.log('🐯 AlbinoTiger: First 200 chars:', combinedPrompt.substring(0, 200));
 
-    pasteTextIntoChat(combinedPrompt);
+    pasteTextIntoChat(combinedPrompt, autoSend); // EDITED: Pass autoSend
   }
 
-  function pasteTextIntoChat(text) {
+  function pasteTextIntoChat(text, autoSend = true) {
     console.log('🐯 AlbinoTiger: ===== ATTEMPTING TO PASTE =====');
     console.log('🐯 AlbinoTiger: Text length:', text.length);
 
@@ -1047,14 +1115,123 @@
 
     console.log('🐯 AlbinoTiger: ✓ Text pasted successfully');
     console.log('🐯 AlbinoTiger: Current target content length:', target.textContent?.length || target.value?.length || 0);
-    
-    // EDITED: Reset prompt if Once mode is enabled
+
+    // EDITED: Auto-send if requested
+    if (autoSend) {
+      console.log('🐯 AlbinoTiger: Attempting to send message...');
+      setTimeout(() => {
+        sendMessage(target);
+      }, 100); // Small delay to ensure paste is complete
+    }
+
+    // Reset prompt if Once mode is enabled
     if (state.onceMode && state.toggledPrompts.size > 0) {
       state.toggledPrompts.clear();
       renderPromptSelector();
       saveState();
       console.log('🐯 AlbinoTiger: Once mode - prompt reset to None');
     }
+  }
+
+  function sendMessage(target) {
+    console.log('🐯 AlbinoTiger: ===== ATTEMPTING TO SEND =====');
+
+    // Try to find and click a send button first
+    const sendButtonSelectors = [
+      'button[data-testid="send-button"]', // ChatGPT
+      'button[aria-label="Send"]',
+      'button[aria-label="Send Message"]',
+      'button[type="submit"]',
+      'button:has(svg[data-icon="send"])',
+      'button:has(svg[data-icon="arrow-up"])',
+      'div[aria-label="Send Message"]',
+      'button.send-button',
+    ];
+
+    for (const selector of sendButtonSelectors) {
+      try {
+        const sendBtn = document.querySelector(selector);
+        if (sendBtn && !sendBtn.disabled) {
+          console.log('🐯 AlbinoTiger: Found send button with selector:', selector);
+          sendBtn.click();
+          console.log('🐯 AlbinoTiger: ✓ Clicked send button');
+          return;
+        }
+      } catch (e) {
+        // :has() might not be supported, continue
+      }
+    }
+
+    // Fallback: simulate Enter key
+    console.log('🐯 AlbinoTiger: No send button found, simulating Enter key');
+    const enterEvent = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 13,
+      which: 13,
+      bubbles: true,
+      cancelable: true,
+    });
+    target.dispatchEvent(enterEvent);
+
+    // Also try keyup
+    const enterUpEvent = new KeyboardEvent('keyup', {
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 13,
+      which: 13,
+      bubbles: true,
+    });
+    target.dispatchEvent(enterUpEvent);
+
+    console.log('🐯 AlbinoTiger: ✓ Enter key simulated');
+  }
+
+  // EDITED: Clear the chat input box
+  function clearChatInput() {
+    console.log('🐯 AlbinoTiger: ===== CLEARING CHAT INPUT =====');
+
+    const selectors = [
+      'div[contenteditable="true"]',
+      'div.ProseMirror',
+      'textarea[placeholder*="Reply"]',
+      'textarea[placeholder*="Message"]',
+      'textarea[placeholder*="Chat"]',
+      'textarea[data-id="root"]',
+      'textarea',
+      'div[role="textbox"]',
+    ];
+
+    let target = null;
+    for (const selector of selectors) {
+      const elements = document.querySelectorAll(selector);
+      if (elements.length > 0) {
+        target = elements[0];
+        break;
+      }
+    }
+
+    if (!target) {
+      console.log('🐯 AlbinoTiger: No chat input found to clear');
+      return;
+    }
+
+    target.focus();
+
+    if (target.contentEditable === 'true' || target.classList.contains('ProseMirror')) {
+      target.textContent = '';
+      // Clear any paragraph elements inside
+      target.innerHTML = '';
+    } else {
+      target.value = '';
+    }
+
+    // Dispatch events to notify the site
+    ['input', 'change'].forEach(eventType => {
+      target.dispatchEvent(new Event(eventType, { bubbles: true }));
+    });
+
+    console.log('🐯 AlbinoTiger: ✓ Chat input cleared');
   }
 
   // 6. --- INITIALIZATION ---
