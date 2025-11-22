@@ -574,4 +574,103 @@ const AT_STYLES = `
   #at-selected-files::-webkit-scrollbar-thumb:hover {
     background: var(--at-primary);
   }
+
+  /* Loading Spinner */
+  .at-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--at-text-dim);
+    border-top-color: var(--at-primary);
+    border-radius: 50%;
+    animation: at-spin 0.8s linear infinite;
+    margin: 0 auto;
+  }
+
+  @keyframes at-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Toasts */
+  #at-toast-container {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 1000000;
+    pointer-events: none;
+  }
+
+  .at-toast {
+    background: var(--at-bg-alt);
+    color: var(--at-text);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--at-border);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: at-toast-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: auto;
+    max-width: 300px;
+  }
+
+  .at-toast.success { border-color: #22c55e; color: #22c55e; }
+  .at-toast.error { border-color: #ef4444; color: #ef4444; }
+  .at-toast.info { border-color: var(--at-primary); color: var(--at-primary); }
+
+  @keyframes at-toast-in {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes at-toast-out {
+    to { opacity: 0; transform: translateY(-20px); }
+  }
+
+  /* Animations */
+  .at-file-item {
+    animation: at-fade-in 0.2s ease;
+  }
+
+  .at-selected-file-tag {
+    animation: at-scale-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes at-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes at-scale-in {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  /* New Buttons */
+  #at-copy-button {
+    flex: 1;
+    background: var(--at-bg-light);
+    font-size: 10px;
+  }
+  #at-copy-button:hover { background: var(--at-border); }
+
+  #at-preview-button {
+    flex: 1;
+    background: var(--at-bg-light);
+    font-size: 10px;
+  }
+  #at-preview-button:hover { background: var(--at-border); }
+
+  /* Estimate */
+  #at-total-estimate {
+    font-size: 10px;
+    color: var(--at-text-dim);
+    text-align: center;
+    margin-top: 4px;
+  }
 `;

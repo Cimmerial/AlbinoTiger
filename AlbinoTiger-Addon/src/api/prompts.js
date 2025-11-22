@@ -3,7 +3,7 @@
  * Prompt loading and caching
  */
 
-const promptCache = new Map();
+var promptCache = new Map();
 
 async function loadPromptContent(fileName) {
   if (promptCache.has(fileName)) {
