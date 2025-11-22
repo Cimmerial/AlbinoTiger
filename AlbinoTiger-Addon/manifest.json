@@ -28,25 +28,36 @@
       ]
     }
   ],
-  "content_scripts": [
-    {
-      "matches": [
-        "https://*.openai.com/*",
-        "https://chatgpt.com/*",
-        "https://*.claude.ai/*",
-        "https://*.gemini.google.com/*",
-        "https://*.perplexity.ai/*",
-        "https://*.poe.com/*",
-        "https://*.you.com/*",
-        "https://*.phind.com/*",
-        "https://*.mistral.ai/*",
-        "https://*.deepseek.com/*",
-        "https://*.groq.com/*",
-        "https://*.huggingface.co/*"
-      ],
-      "js": [
-        "content.js"
-      ]
-    }
-  ]
+"content_scripts": [
+  {
+    "matches": [
+      "https://*.openai.com/*",
+      "https://chatgpt.com/*",
+      "https://*.claude.ai/*",
+      "https://*.gemini.google.com/*",
+      "https://*.perplexity.ai/*",
+      "https://*.poe.com/*",
+      "https://*.you.com/*",
+      "https://*.phind.com/*",
+      "https://*.mistral.ai/*",
+      "https://*.deepseek.com/*",
+      "https://*.groq.com/*",
+      "https://*.huggingface.co/*"
+    ],
+    "js": [
+      "src/config.js",
+      "src/state.js",
+      "src/api/prompts.js",
+      "src/api/files.js",
+      "src/api/server.js",
+      "src/ui/styles.js",
+      "src/ui/html.js",
+      "src/ui/render.js",
+      "src/ui/events.js",
+      "src/actions/paste.js",
+      "src/actions/go.js",
+      "content.js"
+    ]
+  }
+]
 }
